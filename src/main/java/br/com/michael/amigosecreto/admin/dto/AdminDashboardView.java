@@ -19,5 +19,10 @@ public record AdminDashboardView(
         String organizerWhatsappUrl,
         int participantCount,
         boolean hasDuplicateNames,
-        List<ParticipantRowView> participants) {
+        List<ParticipantRowView> participants,
+        boolean canEdit,
+        boolean canAddParticipant,
+        int maxParticipants) {
+
+    public static final int MAX_PARTICIPANTS = 100;
 }

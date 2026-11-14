@@ -196,10 +196,52 @@ select {
     border-color: #86efac;
 }
 
+.alert-error {
+    color: #7f1d1d;
+    background: #fef2f2;
+    border-color: #fca5a5;
+}
+
 .alert-warning {
     color: #713f12;
     background: #fefce8;
     border-color: #fde047;
+}
+
+.alert-error {
+    color: #7f1d1d;
+    background: #fef2f2;
+    border-color: #fca5a5;
+}
+
+.subsection {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.subsection h3 {
+    margin-top: 0;
+    color: #172554;
+}
+
+.wishlist-preview {
+    margin: 1rem 0;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+}
+
+.wishlist-preview h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+    color: #334155;
+}
+
+.preserve-lines {
+    margin: 0;
+    white-space: pre-wrap;
 }
 
 .details {
@@ -329,4 +371,29 @@ th {
 
 .danger-zone {
     border-color: #fca5a5;
+}
+
+.subsection {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.subsection h3,
+.wishlist-preview h3 {
+    margin-top: 0;
+    color: #172554;
+    font-size: 1rem;
+}
+
+.preserve-lines {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.wishlist-preview {
+    padding: 1rem;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
 }
