@@ -16,10 +16,17 @@ Já implementado:
 - [`CycleDrawSolver`](src/main/java/br/com/michael/amigosecreto/draw/CycleDrawSolver.java) — backtracking com MRV, `RandomGenerator` injetável e orçamento de passos.
   - API: `draw(List<UUID> participants, Map<UUID, Set<UUID>> forbidden) → Map<UUID, UUID>`.
 - [`DrawImpossibleException`](src/main/java/br/com/michael/amigosecreto/draw/DrawImpossibleException.java) — com `Reason` (`TOO_FEW_PARTICIPANTS`, `FORBIDDEN_PAIR_WITH_THREE_PARTICIPANTS`, `NO_ALLOWED_TARGET`, `NO_SOLUTION`, `SEARCH_LIMIT_EXCEEDED`).
-- [`AmigoSecretoApplication`](src/main/java/br/com/michael/amigosecreto/AmigoSecretoApplication.java) — pacote `br.com.michael.amigosecreto`.
-- Testes unitários do solver (12 testes) passando.
+- [`AmigoSecretoApplication`](src/main/java/br/com/michael/amigosecreto/AmigoSecretoApplication.java) — pacote `br.com.michael.amigosecreto` e `@ConfigurationPropertiesScan`.
+- Entidades `Event`, `EventStatus`, `Participant`, `ExclusionGroup` e `Assignment`.
+- Repositórios `EventRepository`, `ParticipantRepository`, `ExclusionGroupRepository` e `AssignmentRepository`.
+- `TokenGenerator` (prefixos `adm_`, `inv_`, `p_`), `LinkBuilder`, `AppProperties` e `NotFoundException`.
+- Testes do solver, do token, do link e de mapeamento JPA (19 testes).
 
-Ainda não existe: domínio JPA, repositórios, serviços, camada web, segurança, Flyway, Docker Compose, templates.
+Ainda não existe: serviços, camada web, segurança, templates e Docker.
+
+**Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. O Compose ainda não foi executado porque o Docker não está instalado nesta máquina.
+
+**Bloco 1 (domínio) concluído:** entidades e repositórios mapeados; `ddl-auto=validate` passou contra a V1; `LinkBuilder` e `TokenGenerator` testados. O `EventRepository.deleteByIdBulk` foi necessário para apagar o evento sem o Hibernate reclamar de referência transitória; a cascata real fica no banco (`ON DELETE CASCADE`).
 
 ---
 
@@ -150,6 +157,7 @@ As duas primeiras garantem “todos dão e recebem exatamente uma vez”; a terc
   - `findByAdminTokenForUpdate(String)`
   - `findByInviteCodeForUpdate(String)`
   - `findByIdForUpdate(UUID)`
+- `int deleteByIdBulk(UUID)` — bulk delete com `clearAutomatically`; a cascata real é do banco (`ON DELETE CASCADE`).
 
 ### `ParticipantRepository`
 
@@ -207,6 +215,7 @@ Depende de `LinkBuilder`.
 - `void setRegistration(Event event, boolean open)` — estado desejado explícito (não toggle); `@Transactional` + lock.
 - `void regenerateInviteCode(Event event)` — `@Transactional` + lock; o código antigo deixa de funcionar.
 - `void reopen(Event event)` — `DRAWN → OPEN`; apaga os `Assignment`, reabre inscrições, zera `firstViewedAt`, mantém `drawCount`.
+- `void delete(Event event)` — apaga o evento com `deleteByIdBulk`; a cascata remove participantes, grupos e `Assignment` no banco. `@Transactional` + lock.
 
 ### `ParticipantService`
 
@@ -274,6 +283,7 @@ Resolve o `Event` por `adminToken` (404 se inexistente).
 | POST | `/admin/{adminToken}/reopen` | Reabre |
 | POST | `/admin/{adminToken}/registration` | Abre/fecha inscrições (`open=true|false`) |
 | POST | `/admin/{adminToken}/invite/regenerate` | Regenera `inviteCode` |
+| POST | `/admin/{adminToken}/delete` | Apaga o evento e todos os dados (confirmação) |
 
 Todos os POSTs usam POST-redirect-GET e `RedirectAttributes` para flash. O painel **nunca** renderiza `Assignment`.
 
@@ -405,7 +415,7 @@ Adicionar:
 - `spring-boot-starter-thymeleaf`
 - `spring-boot-starter-data-jpa`
 - `spring-boot-starter-validation`
-- `flyway-core`
+- `spring-boot-starter-flyway` (Boot 4 modularizou o auto-config do Flyway; `flyway-core` sozinho não ativa)
 - `flyway-database-postgresql`
 - `spring-boot-starter-actuator` (health)
 
@@ -443,7 +453,8 @@ Remover/ajustar:
 - `reopen` zera `firstViewedAt`;
 - `redraw` apaga assignments antigos, mantém tokens e incrementa `drawCount`;
 - teto de 100 participantes;
-- regenerar `inviteCode` invalida o código antigo.
+- regenerar `inviteCode` invalida o código antigo;
+- apagar evento remove participantes, grupos e `Assignment` em cascata.
 
 ### Integração (MockMvc)
 
@@ -475,6 +486,7 @@ Remover/ajustar:
 | `join` | só OPEN + `registrationOpen` | teto 100 |
 | `registration` | só OPEN | estado desejado explícito |
 | `invite/regenerate` | qualquer estado | invalida o código antigo |
+| `delete` | qualquer estado | confirmação explícita; cascata total |
 
 Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é revalidado dentro da transação; duplo clique e duas abas não geram sorteio duplicado nem furam o teto.
 
@@ -482,37 +494,38 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 
 ## 11. Ordem de implementação
 
-1. **Base:** POM final, Docker Compose com Postgres, Flyway V1, perfis, `ddl-auto=validate`.
-2. **Domínio e persistência:** entidades, repositórios, `TokenGenerator`, `LinkBuilder`.
-3. **Eventos e participantes:** criação de evento, painel básico, adicionar/remover, links individuais.
-4. **Link de convite:** `/join/{inviteCode}`, abrir/fechar inscrições, regenerar, teto.
-5. **Grupos de exclusão:** modelo, serviço e tela com checkboxes.
-6. **Sorteio:** `DrawService` + `DrawCompletedEvent` (solver já pronto), integração no painel, refazer e reabrir.
-7. **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
-8. **Acabamento:** Pico.css, mensagens de erro, estados vazios.
-9. **Segurança:** headers, 404 para tokens inválidos, CSRF, testes de privacidade.
-10. **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso, backup.
-11. **Portfólio:** README e `docs/IDEAS.md`.
-12. **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega (spec §15).
+1. [x] **Base:** POM final, Docker Compose com Postgres, Flyway V1, perfis, `ddl-auto=validate`.
+2. [x] **Domínio e persistência:** entidades, repositórios, `TokenGenerator`, `LinkBuilder`.
+3. [ ] **Eventos e participantes:** criação de evento, painel básico, adicionar/remover, links individuais e apagar evento com confirmação.
+4. [ ] **Link de convite:** `/join/{inviteCode}`, abrir/fechar inscrições, regenerar, teto.
+5. [ ] **Grupos de exclusão:** modelo, serviço e tela com checkboxes.
+6. [ ] **Sorteio:** `DrawService` + `DrawCompletedEvent` (solver já pronto), integração no painel, refazer e reabrir.
+7. [ ] **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
+8. [ ] **Acabamento:** Pico.css, mensagens de erro, estados vazios.
+9. [ ] **Segurança:** headers, 404 para tokens inválidos, CSRF, testes de privacidade.
+10. [ ] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso, backup.
+11. [ ] **Portfólio:** README e `docs/IDEAS.md`.
+12. [ ] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega (spec §15).
 
 ---
 
-## 12. Decisões ainda em aberto
+## 12. Decisões fechadas
 
-1. **Organizador pode optar por não participar do sorteio?** Hoje a spec exige exatamente um participante `organizer=true`. Se permitir, vira “no máximo um” e o organizador pode ser removido sem perder o painel.
-2. **Apagar evento:** incluir ação com confirmação no painel? Evita acúmulo de eventos de teste.
-3. **Editar nome do participante:** a spec cita edição no serviço, mas não há rota. Incluir `POST /admin/{token}/participants/{id}` ou remover do escopo.
-4. **CSRF:** token de sessão (recomendado) ou cookie duplo-assinado.
-5. **Testcontainers agora ou H2:** a spec mantém H2; migrar para Testcontainers quando o dialeto começar a divergir.
-6. **Nomes duplicados:** permitir (e sinalizar no painel) ou exigir sobrenome/apelido.
-7. **Wishlist visível ao admin:** recomendo esconder do painel; só aparece para quem tirou a pessoa.
-8. **Fuso:** exibir datas em `America/Sao_Paulo` na borda, mantendo `Instant` em UTC no banco.
+1. **Organizador participa do sorteio no MVP.** O opt-out fica para uma fase futura.
+2. **Apagar evento:** ação no painel, com confirmação explícita e cascata total.
+3. **Editar nome de participante:** fora do MVP; não haverá rota de edição.
+4. **CSRF:** token de sessão próprio (sem Spring Security), validado em todo POST.
+5. **Testes:** H2 + Flyway agora; Testcontainers quando o dialeto começar a divergir.
+6. **Nomes duplicados:** permitidos, com sinalização no painel.
+7. **Wishlist:** não aparece no painel do organizador; só para quem tirou a pessoa.
+8. **Fuso:** `Instant` UTC no banco/domínio; `America/Sao_Paulo` na borda (DTO/template).
 
 ---
 
 ## 13. Critérios de conclusão do MVP
 
 - [ ] Criar evento e receber os três links (painel, participante organizador, convite).
+- [ ] Apagar evento com confirmação, removendo todos os dados em cascata.
 - [ ] Inscrever participantes pelo convite e manualmente, respeitando o teto de 100.
 - [ ] Abrir/fechar inscrições e regenerar o código de convite.
 - [ ] Criar e remover grupos de exclusão com validação.
