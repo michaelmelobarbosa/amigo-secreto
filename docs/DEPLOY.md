@@ -558,6 +558,8 @@ docker rm -f restore-test
 - **Tokens nas URLs.** Painel/participante/convite são acessados por link com token: **nunca
   habilite access log** no proxy (o `Caddyfile` não tem `log`) nem log de requisição na aplicação.
   O token está no *path*, não na query string — filtro de query não resolveria.
+- **Rate limiting.** Ainda não implementado. O plano está em [`RATE-LIMITING.md`](RATE-LIMITING.md)
+  e deve ser executado depois que este deploy estiver estável, antes de divulgar o link.
 - **Actuator interno.** Só `health` é exposto (ver `application.yaml`), sem detalhes; o `Caddyfile`
   responde 404 para `/actuator/*` e o container não publica porta no host.
 - **Postgres sem porta pública.** Só o Caddy publica portas; `db` e `app` usam `expose`/rede interna.
