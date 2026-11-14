@@ -29,6 +29,11 @@
                 <p class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Erro no nome</p>
             </div>
             <div class="field">
+                <label for="join-email">E-mail para receber o link (opcional)</label>
+                <input id="join-email" type="email" th:field="*{email}" maxlength="254" autocomplete="email">
+                <p class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">Erro no e-mail</p>
+            </div>
+            <div class="field">
                 <label for="join-wishlist">O que você gostaria de ganhar? (opcional)</label>
                 <textarea id="join-wishlist" th:field="*{wishlist}" maxlength="2000" rows="5"></textarea>
                 <p class="field-error" th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>

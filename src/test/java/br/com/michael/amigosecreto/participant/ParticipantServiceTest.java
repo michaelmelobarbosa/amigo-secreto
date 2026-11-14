@@ -64,7 +64,7 @@ class ParticipantServiceTest {
     @Test
     void byAccessTokenFindsParticipantAndHidesUnknownToken() {
         Event event = createEvent();
-        Participant participant = participantService.joinByInvite(event, "Bia", null);
+        Participant participant = participantService.joinByInvite(event, "Bia", null, null);
 
         Participant found = participantService.byAccessToken(participant.getAccessToken());
 
@@ -81,11 +81,13 @@ class ParticipantServiceTest {
     void addByOrganizerCreatesRegularParticipantWithGeneratedToken() {
         Event event = createEvent();
 
-        Participant participant = participantService.addByOrganizer(event, "Ana", "Livro");
+        Participant participant = participantService.addByOrganizer(
+                event, "Ana", "  Ana@Example.COM  ", "Livro");
 
         assertNotNull(participant.getId());
         assertEquals("Ana", participant.getName());
         assertEquals("Livro", participant.getWishlist());
+        assertEquals("ana@example.com", participant.getEmail());
         assertFalse(participant.isOrganizer());
         assertTrue(participant.getAccessToken().startsWith("p_"));
         assertEquals(event.getId(), participant.getEvent().getId());
@@ -97,10 +99,55 @@ class ParticipantServiceTest {
         Event event = createEvent();
         eventService.setRegistrationByAdminToken(event.getAdminToken(), false);
 
-        Participant participant = participantService.addByOrganizer(event, "Ana", null);
+        Participant participant = participantService.addByOrganizer(event, "Ana", null, null);
 
         assertNotNull(participant.getId());
         assertEquals(2, participantRepository.countByEvent_Id(event.getId()));
+    }
+
+    @Test
+    void emailIsStoredNormalized() {
+        Event event = createEvent();
+
+        Participant participant = participantService.joinByInvite(
+                event, "Bia", "  Bia.Silva@Example.COM  ", null);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        assertEquals(
+                "bia.silva@example.com",
+                participantRepository.findById(participant.getId()).orElseThrow().getEmail());
+    }
+
+    @Test
+    void emailIsOptionalAndBlankBecomesNull() {
+        Event event = createEvent();
+
+        Participant withoutEmail = participantService.joinByInvite(event, "Bia", null, null);
+        Participant blankEmail = participantService.addByOrganizer(event, "Carla", "   ", null);
+
+        assertNull(withoutEmail.getEmail());
+        assertNull(blankEmail.getEmail());
+
+        entityManager.flush();
+        entityManager.clear();
+
+        assertNull(participantRepository.findById(withoutEmail.getId()).orElseThrow().getEmail());
+        assertNull(participantRepository.findById(blankEmail.getId()).orElseThrow().getEmail());
+    }
+
+    @Test
+    void emailLongerThanColumnIsRejectedWithFriendlyMessage() {
+        Event event = createEvent();
+
+        RuleViolationException error = assertThrows(
+                RuleViolationException.class,
+                () -> participantService.joinByInvite(
+                        event, "Bia", "a".repeat(250) + "@x.com", null));
+
+        assertEquals("O e-mail deve ter até 254 caracteres.", error.getMessage());
+        assertEquals(1, participantRepository.countByEvent_Id(event.getId()));
     }
 
     @Test
@@ -111,7 +158,7 @@ class ParticipantServiceTest {
 
         RuleViolationException error = assertThrows(
                 RuleViolationException.class,
-                () -> participantService.addByOrganizer(event, "Ana", null));
+                () -> participantService.addByOrganizer(event, "Ana", null, null));
         assertEquals(
                 "Participantes só podem ser adicionados antes do sorteio.",
                 error.getMessage());
@@ -121,11 +168,13 @@ class ParticipantServiceTest {
     void joinByInviteAddsParticipantWhenRegistrationIsOpen() {
         Event event = createEvent();
 
-        Participant participant = participantService.joinByInvite(event, "Bia", "Fone");
+        Participant participant = participantService.joinByInvite(
+                event, "Bia", "Bia@Example.com", "Fone");
 
         assertNotNull(participant.getId());
         assertEquals("Bia", participant.getName());
         assertEquals("Fone", participant.getWishlist());
+        assertEquals("bia@example.com", participant.getEmail());
         assertFalse(participant.isOrganizer());
         assertTrue(participant.getAccessToken().startsWith("p_"));
         assertEquals(2, participantRepository.countByEvent_Id(event.getId()));
@@ -139,7 +188,7 @@ class ParticipantServiceTest {
 
         RuleViolationException error = assertThrows(
                 RuleViolationException.class,
-                () -> participantService.joinByInvite(event, "Bia", null));
+                () -> participantService.joinByInvite(event, "Bia", null, null));
 
         assertEquals("As inscrições estão encerradas.", error.getMessage());
         assertEquals(before, participantRepository.countByEvent_Id(event.getId()));
@@ -153,7 +202,7 @@ class ParticipantServiceTest {
 
         RuleViolationException error = assertThrows(
                 RuleViolationException.class,
-                () -> participantService.joinByInvite(event, "Bia", null));
+                () -> participantService.joinByInvite(event, "Bia", null, null));
 
         assertEquals("As inscrições estão encerradas.", error.getMessage());
     }
@@ -163,13 +212,13 @@ class ParticipantServiceTest {
         Event event = createEvent();
         // O organizador já ocupa uma das 100 vagas.
         for (int i = 0; i < 99; i++) {
-            participantService.addByOrganizer(event, "Convidado " + i, null);
+            participantService.addByOrganizer(event, "Convidado " + i, null, null);
         }
         assertEquals(100, participantRepository.countByEvent_Id(event.getId()));
 
         RuleViolationException error = assertThrows(
                 RuleViolationException.class,
-                () -> participantService.joinByInvite(event, "Excedente", null));
+                () -> participantService.joinByInvite(event, "Excedente", null, null));
 
         assertEquals(
                 "O evento já atingiu o limite de 100 participantes.",
@@ -180,7 +229,7 @@ class ParticipantServiceTest {
     @Test
     void removeDeletesParticipantFromEvent() {
         Event event = createEvent();
-        Participant participant = participantService.joinByInvite(event, "Bia", null);
+        Participant participant = participantService.joinByInvite(event, "Bia", null, null);
         UUID participantId = participant.getId();
 
         participantService.remove(event, participantId);
@@ -208,7 +257,7 @@ class ParticipantServiceTest {
         Event otherEvent = eventService.create(new CreateEventCommand(
                 "Trabalho", LocalDate.of(2026, 12, 20), null, "Ana"));
         Participant fromOtherEvent =
-                participantService.joinByInvite(otherEvent, "Bia", null);
+                participantService.joinByInvite(otherEvent, "Bia", "bia@example.com", null);
 
         assertThrows(
                 NotFoundException.class,
@@ -220,7 +269,7 @@ class ParticipantServiceTest {
     @Test
     void removeIsRejectedAfterDraw() {
         Event event = createEvent();
-        Participant participant = participantService.joinByInvite(event, "Bia", null);
+        Participant participant = participantService.joinByInvite(event, "Bia", null, null);
         event.markDrawn(Instant.now());
         eventRepository.saveAndFlush(event);
 
@@ -237,7 +286,7 @@ class ParticipantServiceTest {
     @Test
     void updateWishlistPersistsValueAndTurnsBlankIntoNull() {
         Event event = createEvent();
-        Participant participant = participantService.joinByInvite(event, "Bia", null);
+        Participant participant = participantService.joinByInvite(event, "Bia", null, null);
 
         participantService.updateWishlist(participant, "Fone de ouvido");
         assertEquals(
@@ -255,7 +304,7 @@ class ParticipantServiceTest {
     @Test
     void updateWishlistIsAllowedAfterDraw() {
         Event event = createEvent();
-        Participant participant = participantService.joinByInvite(event, "Bia", null);
+        Participant participant = participantService.joinByInvite(event, "Bia", null, null);
         event.markDrawn(Instant.now());
         eventRepository.saveAndFlush(event);
 
@@ -267,7 +316,7 @@ class ParticipantServiceTest {
     @Test
     void updateWishlistOfMissingParticipantRaisesNotFound() {
         Event event = createEvent();
-        Participant participant = participantService.joinByInvite(event, "Bia", null);
+        Participant participant = participantService.joinByInvite(event, "Bia", null, null);
         participantService.remove(event, participant.getId());
 
         assertThrows(
@@ -278,7 +327,7 @@ class ParticipantServiceTest {
     @Test
     void markFirstViewedStoresTimestampOnceAndIsIdempotent() {
         Event event = createEvent();
-        Participant participant = participantService.joinByInvite(event, "Bia", null);
+        Participant participant = participantService.joinByInvite(event, "Bia", null, null);
 
         participantService.markFirstViewed(participant);
         assertNotNull(participant.getFirstViewedAt());
@@ -302,7 +351,7 @@ class ParticipantServiceTest {
     void resultForReturnsReceiverNameAndWishlist() {
         Event event = createEvent();
         Participant giver = eventService.organizerOf(event);
-        Participant receiver = participantService.joinByInvite(event, "Bia", "Livro");
+        Participant receiver = participantService.joinByInvite(event, "Bia", null, "Livro");
         assignmentRepository.save(new Assignment(event, giver, receiver));
 
         Optional<ParticipantResult> result = participantService.resultFor(giver);
@@ -324,7 +373,7 @@ class ParticipantServiceTest {
     void resultForKeepsNullWishlist() {
         Event event = createEvent();
         Participant giver = eventService.organizerOf(event);
-        Participant receiver = participantService.joinByInvite(event, "Bia", null);
+        Participant receiver = participantService.joinByInvite(event, "Bia", null, null);
         assignmentRepository.save(new Assignment(event, giver, receiver));
 
         ParticipantResult result = participantService.resultFor(giver).orElseThrow();

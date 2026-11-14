@@ -96,6 +96,8 @@
                 <thead>
                 <tr>
                     <th scope="col">Nome</th>
+                    <th scope="col">E-mail</th>
+                    <th scope="col">Status do e-mail</th>
                     <th scope="col">Link individual</th>
                     <th scope="col">Já visualizou</th>
                     <th scope="col" th:if="${event.canEdit}">Ação</th>
@@ -107,6 +109,16 @@
                         <span th:text="${row.name}">Ana</span>
                         <span class="badge" th:if="${row.organizer}">Organizador</span>
                         <span class="badge badge-warning" th:if="${row.duplicateName}">Nome repetido</span>
+                    </td>
+                    <td class="email-cell" th:text="${row.emailStatusLabel == 'Sem e-mail' ? 'Sem e-mail' : row.email}">pessoa@example.com</td>
+                    <td>
+                        <span th:text="${row.emailStatusLabel}">Aguardando sorteio</span>
+                        <form class="resend-email-form" th:if="${row.canResendEmail}"
+                              th:action="@{/admin/{token}/participants/{id}/email/resend(token=${adminToken},id=${row.id})}"
+                              method="post" data-confirm="Reenviar o e-mail para este participante?">
+                            <div th:replace="~{fragments/common :: csrf}"></div>
+                            <button class="button secondary" type="submit">Reenviar</button>
+                        </form>
                     </td>
                     <td>
                         <div class="row-actions">
@@ -137,6 +149,11 @@
                     <label for="participant-name">Nome</label>
                     <input id="participant-name" type="text" th:field="*{name}" maxlength="80" required autocomplete="name">
                     <p class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Erro no nome</p>
+                </div>
+                <div class="field">
+                    <label for="participant-email">E-mail para receber o link (opcional)</label>
+                    <input id="participant-email" type="email" th:field="*{email}" maxlength="254" autocomplete="email">
+                    <p class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">Erro no e-mail</p>
                 </div>
                 <div class="field">
                     <label for="participant-wishlist">Lista de desejos (opcional)</label>

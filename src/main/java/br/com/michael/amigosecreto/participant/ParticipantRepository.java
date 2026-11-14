@@ -24,7 +24,7 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     @Query("""
             select new br.com.michael.amigosecreto.participant.dto.ParticipantRow(
-                p.id, p.name, p.accessToken, p.organizer, p.firstViewedAt)
+                p.id, p.name, p.accessToken, p.email, p.organizer, p.firstViewedAt)
             from Participant p
             where p.event.id = :eventId
             order by p.name, p.id
