@@ -116,7 +116,8 @@
                     </td>
                     <td th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</td>
                     <td th:if="${event.canEdit}">
-                        <form th:if="${row.canRemove}" th:action="@{/admin/{token}/participants/{id}/delete(token=${adminToken},id=${row.id})}" method="post">
+                        <form th:if="${row.canRemove}" th:action="@{/admin/{token}/participants/{id}/delete(token=${adminToken},id=${row.id})}" method="post"
+                              th:attr="data-confirm=|Remover ${row.name}?|">
                             <div th:replace="~{fragments/common :: csrf}"></div>
                             <button class="button danger" type="submit">Remover</button>
                         </form>
@@ -164,7 +165,8 @@
                     </div>
                     <form th:if="${event.canManageExclusions}"
                           th:action="@{/admin/{token}/exclusions/{id}/delete(token=${adminToken},id=${group.id})}"
-                          method="post">
+                          method="post"
+                          data-confirm="Remover este grupo de restrição?">
                         <div th:replace="~{fragments/common :: csrf}"></div>
                         <button class="button danger" type="submit">Remover</button>
                     </form>
@@ -212,7 +214,7 @@
             <form th:if="${event.canDraw}"
                   th:action="@{/admin/{token}/draw(token=${adminToken})}"
                   method="post"
-                  onsubmit="return confirm('Sortear agora? O resultado será mostrado apenas a cada participante.');">
+                  data-confirm="Sortear agora? O resultado será mostrado apenas a cada participante.">
                 <div th:replace="~{fragments/common :: csrf}"></div>
                 <button class="button" type="submit">Sortear</button>
             </form>
@@ -226,12 +228,12 @@
             <span class="badge badge-warning" th:if="${event.redrawn}">Sorteio refeito</span>
             <div class="row-actions">
                 <form th:action="@{/admin/{token}/redraw(token=${adminToken})}" method="post"
-                      onsubmit="return confirm('Refazer o sorteio? Todos os resultados atuais serão descartados.');">
+                      data-confirm="Refazer o sorteio? Todos os resultados atuais serão descartados.">
                     <div th:replace="~{fragments/common :: csrf}"></div>
                     <button class="button" type="submit">Refazer sorteio</button>
                 </form>
                 <form th:action="@{/admin/{token}/reopen(token=${adminToken})}" method="post"
-                      onsubmit="return confirm('Reabrir para editar? Os resultados atuais serão descartados.');">
+                      data-confirm="Reabrir para editar? Os resultados atuais serão descartados.">
                     <div th:replace="~{fragments/common :: csrf}"></div>
                     <button class="button secondary" type="submit">Reabrir e editar</button>
                 </form>
@@ -253,7 +255,7 @@
         <h2>Apagar evento</h2>
         <p class="muted">Remove participantes, grupos e resultados. Não dá para desfazer.</p>
         <form th:action="@{/admin/{token}/delete(token=${adminToken})}" method="post"
-              onsubmit="return confirm('Apagar o evento e todos os dados? Esta ação não pode ser desfeita.');">
+              data-confirm="Apagar o evento e todos os dados? Esta ação não pode ser desfeita.">
             <div th:replace="~{fragments/common :: csrf}"></div>
             <button class="button danger" type="submit">Apagar evento</button>
         </form>

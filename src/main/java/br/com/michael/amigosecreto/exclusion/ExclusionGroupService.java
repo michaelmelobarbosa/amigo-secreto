@@ -99,6 +99,7 @@ public class ExclusionGroupService {
     @Transactional(readOnly = true)
     public List<ExclusionGroupView> viewsFor(Event event) {
         return exclusionGroupRepository.findByEventIdWithMembers(event.getId()).stream()
+                .filter(group -> group.getMembers().size() >= MIN_MEMBERS)
                 .map(group -> new ExclusionGroupView(
                         group.getId(),
                         group.getLabel(),

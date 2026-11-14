@@ -22,6 +22,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -214,7 +215,8 @@ public class AdminController {
         List<ExclusionGroupView> exclusionGroups = exclusionGroupService.viewsFor(event);
 
         Map<String, Long> nameCounts = rows.stream()
-                .collect(Collectors.groupingBy(ParticipantRow::name, Collectors.counting()));
+                .collect(Collectors.groupingBy(
+                        row -> normalizedName(row.name()), Collectors.counting()));
 
         List<ParticipantRowView> participants = rows.stream()
                 .map(row -> new ParticipantRowView(
@@ -224,7 +226,7 @@ public class AdminController {
                         inviteService.participantWhatsappUrl(event, row.name(), row.accessToken()),
                         row.organizer(),
                         row.firstViewedAt(),
-                        nameCounts.getOrDefault(row.name(), 0L) > 1,
+                        nameCounts.getOrDefault(normalizedName(row.name()), 0L) > 1,
                         event.isOpen() && !row.organizer()))
                 .toList();
 
@@ -259,8 +261,8 @@ public class AdminController {
                 participants.stream().anyMatch(ParticipantRowView::duplicateName),
                 participants,
                 event.isOpen(),
-                event.isOpen() && participants.size() < AdminDashboardView.MAX_PARTICIPANTS,
-                AdminDashboardView.MAX_PARTICIPANTS,
+                event.isOpen() && participants.size() < ParticipantService.MAX_PARTICIPANTS,
+                ParticipantService.MAX_PARTICIPANTS,
                 exclusionGroups,
                 event.isOpen(),
                 canDraw,
@@ -282,8 +284,11 @@ public class AdminController {
     }
 
     private String redirectToDashboard(String adminToken, RedirectAttributes redirectAttributes) {
-        redirectAttributes.addAttribute("adminToken", adminToken);
-        return "redirect:/admin/{adminToken}";
+        return "redirect:/admin/" + adminToken;
+    }
+
+    private static String normalizedName(String name) {
+        return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
     }
 
     @PostMapping("/admin/{adminToken}/delete")

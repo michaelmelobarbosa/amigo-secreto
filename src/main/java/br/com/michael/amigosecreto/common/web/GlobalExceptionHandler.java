@@ -1,6 +1,7 @@
 package br.com.michael.amigosecreto.common.web;
 
 import br.com.michael.amigosecreto.common.NotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -17,6 +18,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CsrfTokenException.class)
     public ModelAndView handleCsrfFailure() {
         return errorView("error/403", HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ModelAndView handleDataIntegrityViolation() {
+        return errorView("error/500", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     private ModelAndView errorView(String viewName, HttpStatus status) {

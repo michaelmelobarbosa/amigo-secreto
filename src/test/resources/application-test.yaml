@@ -13,5 +13,11 @@ spring:
   flyway:
     enabled: true
 
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
+
 app:
   base-url: http://localhost:8080
