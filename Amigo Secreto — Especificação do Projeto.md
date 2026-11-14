@@ -27,6 +27,7 @@ Aplicação web para organizar amigo secreto, sem login, com acesso por links co
 | Tipo de sorteio | Ciclo único: ninguém tira quem lhe tirou (sem troca direta) |
 | Refazer sorteio | No MVP: refazer (mantém os links) e reabrir para editar |
 | Admin | Também participa do sorteio, com dois links separados (painel e página de participante) |
+| Exclusão de evento | O organizador pode apagar o evento com confirmação. A cascata remove participantes, grupos e `Assignment`; ação irreversível |
 | Wishlist | Texto livre por participante, no MVP, editável antes e depois do sorteio |
 | Banco | PostgreSQL em dev e produção (Docker Compose). H2 apenas nos testes |
 | Migrações | Flyway desde a V1; `spring.jpa.hibernate.ddl-auto=validate`. Não usar `update` no schema real (seção 8) |
@@ -81,6 +82,7 @@ Assignment
 ```
 
 > A fase 2 adiciona `Participant.email` (opcional, normalizado) e a tabela `notification`; o MVP não tem e-mail.
+> `Instant` é sempre UTC no banco e no domínio; a conversão para `America/Sao_Paulo` acontece apenas na borda (DTO/template).
 
 **Regras de integridade**
 
@@ -106,8 +108,8 @@ Assignment
 
 | Classe | Responsabilidade |
 | --- | --- |
-| `EventService` | Criar evento (já cria o organizador como participante), consultar por `adminToken`, abrir e fechar inscrições, regenerar `inviteCode`, reabrir o evento (`DRAWN` → `OPEN`, apagando os `Assignment`) |
-| `ParticipantService` | Adicionar (manualmente ou pelo convite), remover e editar participantes (somente em `OPEN`), respeitar o teto de participantes, atualizar wishlist, registrar primeira visualização |
+| `EventService` | Criar evento (já cria o organizador como participante), consultar por `adminToken`, abrir e fechar inscrições, regenerar `inviteCode`, reabrir o evento (`DRAWN` → `OPEN`, apagando os `Assignment`) e apagar o evento com cascata |
+| `ParticipantService` | Adicionar (manualmente ou pelo convite), remover participantes (somente em `OPEN`), respeitar o teto de participantes, atualizar wishlist, registrar primeira visualização |
 | `ExclusionGroupService` | Criar e remover grupos de exclusão (somente em `OPEN`), validar que os membros são do evento e que o grupo tem pelo menos 2 pessoas |
 | `DrawService` | Validar viabilidade, executar o sorteio com busca em profundidade (backtracking) e fonte de aleatoriedade injetável, persistir `Assignment`, mudar o status para `DRAWN` e fechar as inscrições. Distingue impossibilidade comprovada de limite de busca. Também refaz o sorteio (apaga os `Assignment`, sorteia de novo, incrementa `drawCount`, atualiza `drawnAt` e zera `firstViewedAt`). Tudo em uma transação. Publica `DrawCompletedEvent` **depois do commit**, para a fase 2 notificar sem acoplar o sorteio ao e-mail |
 | `InviteService` | Montar o link de convite, os links individuais e o texto para compartilhar no WhatsApp usando o `LinkBuilder`. Na fase 2, envio por e-mail |
@@ -177,6 +179,9 @@ A tela de sucesso mostra três links: o painel (`/admin/{adminToken}`), a págin
 - Botão "Sortear", que só habilita com 3 participantes sem restrições ou 4 com pelo menos um grupo de exclusão. Mostra erro claro se o sorteio for inviável.
 - Depois do sorteio: o painel mostra apenas o status de visualização e os botões "Refazer sorteio" e "Reabrir e editar". **Nunca exibe quem tirou quem.**
 - Link de acesso do próprio organizador como participante em destaque.
+- Nomes duplicados são permitidos; o painel sinaliza quando há repetição.
+- A wishlist não é exibida no painel do organizador.
+- Zona de perigo: "Apagar evento" com confirmação explícita. Remove participantes, grupos e `Assignment` em cascata; ação irreversível.
 - No MVP, nenhum e-mail é enviado: os links são copiados ou compartilhados manualmente pelo WhatsApp.
 
 ### 6.3 Página do participante (`/p/{accessToken}`)
@@ -213,12 +218,13 @@ A tela de sucesso mostra três links: o painel (`/admin/{adminToken}`), a págin
 | POST | `/admin/{adminToken}/reopen` | Reabre o evento para edição |
 | POST | `/admin/{adminToken}/registration` | Abre ou fecha as inscrições |
 | POST | `/admin/{adminToken}/invite/regenerate` | Regenera o `inviteCode` |
+| POST | `/admin/{adminToken}/delete` | Apaga o evento e todos os dados (confirmação) |
 | GET | `/join/{inviteCode}` | Formulário de inscrição |
 | POST | `/join/{inviteCode}` | Cadastra o participante |
 | GET | `/p/{accessToken}` | Página do participante |
 | POST | `/p/{accessToken}/wishlist` | Atualiza a wishlist |
 
-Use POST para remoções (formulários HTML não têm DELETE) e proteja contra CSRF com o mecanismo padrão do Thymeleaf ou um token simples.
+Use POST para remoções (formulários HTML não têm DELETE) e proteja contra CSRF com um token de sessão próprio (não há Spring Security).
 
 ## 7. Segurança e privacidade
 
@@ -226,7 +232,8 @@ Use POST para remoções (formulários HTML não têm DELETE) e proteja contra C
 - Os tokens do admin, do convite e dos participantes são distintos. Os dois últimos não dão acesso ao painel.
 - Rotas `/p/**`, `/join/**` e `/admin/**` com `Cache-Control: no-store` e `Referrer-Policy: no-referrer`, para o token não vazar para terceiros.
 - O convite é público: limite de tamanho nos campos, teto de participantes por evento e, na fase 2, rate limiting por IP.
-- Validação de entrada com Bean Validation e escape automático do Thymeleaf contra XSS. Proteção CSRF nos formulários.
+- Validação de entrada com Bean Validation e escape automático do Thymeleaf contra XSS. Proteção CSRF com token de sessão próprio em todos os POSTs.
+- Apagar evento exige CSRF e confirmação explícita; a operação é irreversível.
 - Segredos (senha do banco) em variáveis de ambiente, fora do repositório.
 - Como os tokens viajam na URL, não exponha o app em HTTP puro na internet com dados reais. Enquanto não houver domínio e HTTPS, use em rede local ou com um túnel.
 - Disciplina do organizador: o banco guarda os `Assignment` em claro. Quem tem acesso direto ao banco pode ver o resultado. Para uso em família e trabalho isso é aceitável, e vale registrar no README.
@@ -304,6 +311,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 - unicidade dos tokens;
 - refazer sorteio: apaga os `Assignment` antigos, mantém os tokens, zera `firstViewedAt` e incrementa `drawCount`;
 - reabrir evento: volta para `OPEN`, apaga os `Assignment` e reabre as inscrições;
+- apagar evento: remove participantes, grupos e `Assignment` em cascata;
 - teto de participantes e regeneração do `inviteCode`.
 
 **Integração (MockMvc)**
@@ -343,7 +351,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 
 1. **Base do projeto:** Spring Initializr, Docker Compose com Postgres, Flyway desde a V1, `ddl-auto=validate`, perfil de teste com H2.
 2. **Domínio e persistência:** entidades, repositórios, `TokenGenerator`, `LinkBuilder` com `app.base-url`.
-3. **Eventos e participantes:** criação de evento, painel básico, adicionar e remover participantes, links individuais.
+3. **Eventos e participantes:** criação de evento, painel básico, adicionar e remover participantes, links individuais e apagar evento com confirmação.
 4. **Link de convite:** `/join/{inviteCode}`, abrir e fechar inscrições, regenerar o código, teto de participantes.
 5. **Grupos de exclusão:** modelo, serviço e tela com checkboxes.
 6. **Sorteio:** `DrawService` com testes unitários primeiro (incluindo 16 participantes em dois grupos de 8), depois a integração com o painel, incluindo refazer e reabrir. Publica `DrawCompletedEvent` após o commit; o MVP não tem listener.
@@ -368,6 +376,7 @@ Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados 
 - 2026-11-13: MVP sem e-mail; entrega manual por copiar/WhatsApp. E-mail fica para a fase 2, opcional e sem virar login; telefone/WhatsApp API/SMS fora do MVP.
 - 2026-11-13: preparação para e-mail no MVP: `LinkBuilder` com `app.base-url` e `DrawCompletedEvent` após o commit, sem coluna/provider/tabela de e-mail agora.
 - 2026-11-13: Flyway desde a V1 com `ddl-auto=validate`; `update` não é usado.
+- 2026-11-13: decisões de MVP confirmadas: organizador participa; apagar evento com confirmação; sem edição de nome de participante; CSRF por token de sessão; H2 nos testes; nomes duplicados permitidos com aviso; wishlist fora do painel; fuso convertido na borda.
 
 ## 15. Fase 2 — e-mail (planejado)
 
