@@ -4,7 +4,7 @@ Documento de trabalho derivado da especificação ([especificação](<./Amigo Se
 
 - **Stack:** Java 25, Spring Boot 4.1.2, Spring MVC + Thymeleaf, Spring Data JPA, Bean Validation, Flyway, PostgreSQL (dev/prod) e H2 (testes).
 - **Princípios:** sem login, acesso por token, poucas telas, sem SPA, sem Spring Security.
-- **MVP sem e-mail:** entrega de links manual (copiar/WhatsApp). E-mail é fase 2 (spec §15).
+- **E-mail (fase 2 implementada):** canal opcional via Brevo; o caminho manual (copiar/WhatsApp) continua. Ver spec §15.
 - **Migrações:** Flyway desde a V1; `spring.jpa.hibernate.ddl-auto=validate`.
 
 ---
@@ -26,11 +26,12 @@ Já implementado:
 - Fundação web: CSRF de sessão, `SecurityHeadersFilter`, `GlobalExceptionHandler`, `GlobalBindingAdvice`, `WebConfig`, layout/fragmentos, CSS e JS.
 - Templates `index`, `admin/dashboard`, `join/form`, `join/closed`, `participant/view`, erros 403/404/500.
 - Segurança: cookie `Secure` por padrão (perfil `dev` desativa), headers em todas as rotas dinâmicas, CSP sem inline, `robots.txt`, CSP/`data-confirm`, preview bots não marcam `firstViewedAt`.
-- Deploy: `Dockerfile` multi-stage, `docker-compose.prod.yml` (app + Postgres + Caddy), `Caddyfile`, scripts de backup/restore, `docs/DEPLOY.md`.
+- E-mail (fase 2): `Participant.email`, tabela `notification`, `EmailSender`/`BrevoEmailSender`, `EmailContentBuilder`, listener de `DrawCompletedEvent` (nova transação pós-commit), worker com retry/idempotência e status/reenvio no painel.
+- Deploy: `Dockerfile` multi-stage, `docker-compose.prod.yml` (app + Postgres + Caddy), `Caddyfile`, scripts de backup/restore, `docs/DEPLOY.md` (operação + decisões) e `docs/INFRA-VPS.md` (Caddy de borda e múltiplas apps).
 - Portfólio: `README.md`, `docs/IDEAS.md` e CI em `.github/workflows/ci.yml`.
-- Testes do solver, token, link, mapeamento JPA, serviços e fluxos web com MockMvc (106 testes).
+- Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox e e-mail (139 testes).
 
-Ainda não existe: execução real na VPS e a fase 2 de e-mail.
+Ainda não existe: execução real na VPS.
 
 **Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. O Compose ainda não foi executado porque o Docker não está instalado nesta máquina.
 
@@ -44,7 +45,9 @@ Ainda não existe: execução real na VPS e a fase 2 de e-mail.
 
 **Bloco 5 (segurança + consistência) concluído:** auditorias de segurança e de JPA, cookie `Secure` por padrão, headers em redirects, CSP + `data-confirm`, `robots.txt`, página 500, escopo da wishlist, nomes duplicados case-insensitive, preview bots, limpeza de grupos degenerados e testes de segurança (106 testes).
 
-**Bloco 6 (deploy + portfólio) concluído em arquivos:** Dockerfile multi-stage, Compose de produção, Caddy/HTTPS, backup/restore, `docs/DEPLOY.md`, README, `docs/IDEAS.md` e CI. A execução real na VPS (build, certificado, restore) continua pendente porque o Docker não está instalado nesta máquina.
+**Bloco 6 (deploy + portfólio) concluído em arquivos:** Dockerfile multi-stage, Compose de produção, Caddy/HTTPS, backup/restore, `docs/DEPLOY.md`, `docs/INFRA-VPS.md`, README, `docs/IDEAS.md` e CI. O ambiente da VPS foi levantado pelo agente Hermes (ARM64, 2 vCPU, 11 GB de RAM, 29 GB livres, Docker não instalado, portas 8080/9119/9120 ocupadas pelo próprio Hermes) e está registrado em `docs/DEPLOY.md`. A execução real continua pendente, e o documento lista as pendências de código P1–P7 a aplicar antes do primeiro deploy (bind do Postgres de dev, limites de memória/log, build ARM64 fora da VPS, imagem de registry).
+
+**Bloco 7 (e-mail / Brevo) concluído:** conta e domínio `mail.barbosalabs.dev` autenticados, sender e API key validados, envio real testado; migrações V2/V3, outbox `notification`, `BrevoEmailSender`, listener pós-commit, worker com retry/idempotência, templates HTML/texto, e-mail opcional no join/adição manual e status/reenvio no painel. 139 testes verdes.
 
 ---
 
@@ -97,7 +100,7 @@ br.com.michael.amigosecreto
     └── dto/ (AdminDashboardView, ...)
 ```
 
-`notification/` **não** entra no MVP (fase 2). A direção é sempre controller → service → repository; entidades não vão para a view.
+`notification/` e `email/` implementam a fase 2 (outbox e Brevo). A direção é sempre controller → service → repository; entidades não vão para a view.
 
 ---
 
@@ -228,7 +231,7 @@ Não depende de `HttpServletRequest`, para funcionar também em envio assíncron
 Depende de `LinkBuilder`.
 
 - `InviteLinks linksFor(Event event, Participant organizer)` → record com as três URLs e os textos de compartilhamento.
-- Usado pela tela de criação, pelo painel e, na fase 2, pelo e-mail.
+- Usado pela tela de criação, pelo painel e pelo e-mail.
 
 ### `EventService`
 
@@ -261,14 +264,14 @@ Depende de `LinkBuilder`.
 
 - `void drawByAdminToken(String adminToken)` — `@Transactional` + lock pelo token; exige `OPEN`; monta os pares proibidos dos grupos; chama `CycleDrawSolver`; persiste `Assignment`; `markDrawn` fecha inscrições, grava `drawnAt` e incrementa `drawCount`; publica `DrawCompletedEvent` **após o commit**.
 - `void redrawByAdminToken(String adminToken)` — `@Transactional` + lock; exige `DRAWN`; apaga assignments antigos, zera `firstViewedAt`, sorteia de novo e incrementa `drawCount`; rollback mantém o resultado antigo se o solver falhar.
-- `DrawCompletedEvent` é publicado via `TransactionSynchronization`; sem listener no MVP (a fase 2 escuta para e-mail).
+- `DrawCompletedEvent` é publicado via `TransactionSynchronization`; o listener de e-mail (`EmailNotificationListener`) abre uma transação nova e grava o outbox.
 - `DrawConfig` cria o `CycleDrawSolver` com `SecureRandom`.
 
 ### `DrawCompletedEvent`
 
 `record DrawCompletedEvent(UUID eventId, int drawCount, Instant at)`.
 
-No MVP não tem listener (ou tem um listener de log). A fase 2 adiciona o listener de e-mail sem alterar o `DrawService`.
+O listener de e-mail escuta o evento sem alterar o `DrawService`; o envio real fica no worker.
 
 ---
 
@@ -532,7 +535,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 9. [x] **Segurança:** headers em todas as rotas dinâmicas, 404 para tokens inválidos, CSRF, CSP, robots e testes de privacidade.
 10. [x] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso e backup (arquivos prontos; execução na VPS pendente).
 11. [x] **Portfólio:** README, `docs/IDEAS.md` e CI.
-12. [ ] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega. Guia: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
+12. [x] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega. Guia: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
 
 ---
 
@@ -563,7 +566,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [x] Painel nunca expõe quem tirou quem.
 - [x] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
 - [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate` (H2 validado; Postgres pendente no deploy).
-- [x] Testes unitários, de serviço e de integração passando (106 testes).
+- [x] Testes unitários, de serviço e de integração passando (139 testes).
 - [ ] Deploy Docker/Compose funcional na VPS (arquivos prontos; falta executar build, certificado e restore).
 
 ---
@@ -578,6 +581,6 @@ O que ficou conscientemente fora do MVP está detalhado em [`docs/IDEAS.md`](doc
 - **Testes de concorrência** (draw × draw, última vaga, rollback de redraw/reopen).
 - **Tokens em texto claro** e `Assignment` em claro no banco: risco aceito do modelo “link = credencial”.
 - **Tokens na URL**: histórico do navegador; `no-store`/`no-referrer` mitigam, não apagam.
-- **E-mail** é fase 2 (spec §15); telefone/WhatsApp API/SMS ficam fora.
+- **E-mail:** dedupe por endereço (melhor esforço sem verificação) ainda não foi implementado; telefone/WhatsApp API/SMS ficam fora.
 - **CSS próprio** em vez de Pico.css; Pico/HTMX continuam opcionais.
 - **Execução real do deploy** (build, certificado, backup/restore) na VPS.

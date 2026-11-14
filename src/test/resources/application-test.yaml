@@ -21,3 +21,8 @@ server:
 
 app:
   base-url: http://localhost:8080
+  email:
+    enabled: false
+    worker-enabled: false
+    brevo:
+      sandbox: true

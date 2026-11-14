@@ -1,6 +1,6 @@
 # Fase 2 — e-mail com Brevo
 
-Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Nada aqui está implementado ainda**; é o plano aprovado para a fase 2 da spec.
+Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e testado; conta/domínio `barbosalabs.dev`/`mail.barbosalabs.dev` autenticados; falta apenas habilitar no deploy e, se desejado, webhooks.
 
 ## 1. Decisão de arquitetura
 
@@ -346,18 +346,21 @@ Brevo **não assina** webhooks. Para usar:
 
 ## 9. Checklist de implementação
 
-- [ ] Conta Brevo aprovada e 2FA.
-- [ ] Domínio de envio autenticado (Brevo code + DKIM + DMARC; sem SPF include em IP compartilhado).
-- [ ] Sender `no-reply@mail...` criado e `From` alinhado ao domínio.
-- [ ] API key criada, restrita por IP se possível, guardada fora do Git.
-- [ ] Teste de `/v3/account` e envio sandbox.
-- [ ] Migrações V2/V3 com `Participant.email` e `notification`.
-- [ ] `BrevoProperties`, `EmailSender`, `BrevoEmailSender`, `LoggingEmailSender`.
-- [ ] Listener de `DrawCompletedEvent` + outbox + worker + retry/idempotência.
-- [ ] Templates HTML/texto com link absoluto e aviso de privacidade.
-- [ ] Painel com status e reenvio; join com e-mail opcional.
-- [ ] Testes unitários/integração + sandbox + um envio real.
-- [ ] Runbook no README/DEPLOY (env, IP allowlist, cota, rotação).
+- [x] Conta Brevo aprovada e envio real testado.
+- [x] Domínio de envio autenticado (Brevo code + DKIM + DMARC; sem SPF include em IP compartilhado).
+- [x] Sender `no-reply@mail.barbosalabs.dev` criado e `From` alinhado ao domínio.
+- [x] API key criada e guardada fora do Git.
+- [x] Teste de `/v3/account` e envio sandbox.
+- [x] Migrações V2/V3 com `Participant.email` e `notification`.
+- [x] `EmailProperties`, `EmailSender`, `BrevoEmailSender`, `LoggingEmailSender`.
+- [x] Listener de `DrawCompletedEvent` + outbox + worker + retry/idempotência.
+- [x] Templates HTML/texto com link absoluto e aviso de privacidade.
+- [x] Painel com status e reenvio; join com e-mail opcional.
+- [x] Testes unitários/integração + sandbox + um envio real.
+- [x] Runbook no README/DEPLOY (env, IP allowlist, cota, rotação).
+- [ ] Habilitar `EMAIL_ENABLED=true`/`BREVO_SANDBOX=false` no `.env` de produção.
+- [ ] Criar a API key de produção separada e, se usar, liberar o IP da VPS.
+- [ ] Opcional: webhooks de delivered/bounce e double opt-in.
 
 ## 10. Decisões que ainda podem ser tomadas
 

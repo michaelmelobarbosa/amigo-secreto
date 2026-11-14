@@ -15,6 +15,8 @@ import br.com.michael.amigosecreto.exclusion.ExclusionGroupService;
 import br.com.michael.amigosecreto.exclusion.dto.ExclusionGroupView;
 import br.com.michael.amigosecreto.invite.InviteLinks;
 import br.com.michael.amigosecreto.invite.InviteService;
+import br.com.michael.amigosecreto.notification.NotificationService;
+import br.com.michael.amigosecreto.notification.NotificationStatus;
 import br.com.michael.amigosecreto.participant.Participant;
 import br.com.michael.amigosecreto.participant.ParticipantService;
 import br.com.michael.amigosecreto.participant.dto.ParticipantRow;
@@ -27,9 +29,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import jakarta.validation.Valid;
+import org.springframework.beans.propertyeditors.StringTrimmerEditor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,6 +55,7 @@ public class AdminController {
     private final LinkBuilder linkBuilder;
     private final ExclusionGroupService exclusionGroupService;
     private final DrawService drawService;
+    private final NotificationService notificationService;
 
     public AdminController(
             EventService eventService,
@@ -57,13 +63,21 @@ public class AdminController {
             InviteService inviteService,
             LinkBuilder linkBuilder,
             ExclusionGroupService exclusionGroupService,
-            DrawService drawService) {
+            DrawService drawService,
+            NotificationService notificationService) {
         this.eventService = eventService;
         this.participantService = participantService;
         this.inviteService = inviteService;
         this.linkBuilder = linkBuilder;
         this.exclusionGroupService = exclusionGroupService;
         this.drawService = drawService;
+        this.notificationService = notificationService;
+    }
+
+    /** O e-mail chega com espaços do formulário; valida já sem eles. */
+    @InitBinder("addParticipantForm")
+    public void trimEmail(WebDataBinder binder) {
+        binder.registerCustomEditor(String.class, "email", new StringTrimmerEditor(true));
     }
 
     @GetMapping("/admin/{adminToken}")
@@ -85,7 +99,7 @@ public class AdminController {
 
         Event event = eventService.byAdminToken(adminToken);
         try {
-            participantService.addByOrganizer(event, form.name(), form.wishlist());
+            participantService.addByOrganizer(event, form.name(), form.email(), form.wishlist());
             redirectAttributes.addFlashAttribute("message", "Participante adicionado.");
         } catch (RuleViolationException exception) {
             redirectAttributes.addFlashAttribute("error", exception.getMessage());
@@ -102,6 +116,21 @@ public class AdminController {
         try {
             participantService.remove(event, id);
             redirectAttributes.addFlashAttribute("message", "Participante removido.");
+        } catch (RuleViolationException exception) {
+            redirectAttributes.addFlashAttribute("error", exception.getMessage());
+        }
+        return redirectToDashboard(adminToken, redirectAttributes);
+    }
+
+    @PostMapping("/admin/{adminToken}/participants/{id}/email/resend")
+    public String resendParticipantEmail(
+            @PathVariable String adminToken,
+            @PathVariable UUID id,
+            RedirectAttributes redirectAttributes) {
+        Event event = eventService.byAdminToken(adminToken);
+        try {
+            notificationService.resendForParticipant(event, id);
+            redirectAttributes.addFlashAttribute("message", "E-mail reenfileirado.");
         } catch (RuleViolationException exception) {
             redirectAttributes.addFlashAttribute("error", exception.getMessage());
         }
@@ -213,6 +242,8 @@ public class AdminController {
         Participant organizer = eventService.organizerOf(event);
         List<ParticipantRow> rows = participantService.rowsFor(event);
         List<ExclusionGroupView> exclusionGroups = exclusionGroupService.viewsFor(event);
+        Map<UUID, NotificationStatus> statuses =
+                notificationService.statusesFor(event, event.getDrawCount());
 
         Map<String, Long> nameCounts = rows.stream()
                 .collect(Collectors.groupingBy(
@@ -227,7 +258,10 @@ public class AdminController {
                         row.organizer(),
                         row.firstViewedAt(),
                         nameCounts.getOrDefault(normalizedName(row.name()), 0L) > 1,
-                        event.isOpen() && !row.organizer()))
+                        event.isOpen() && !row.organizer(),
+                        row.email(),
+                        emailStatusLabel(row.email(), event.getDrawCount(), statuses.get(row.id())),
+                        event.getDrawCount() > 0 && hasEmail(row.email())))
                 .toList();
 
         InviteLinks links = inviteService.linksFor(event, organizer);
@@ -275,7 +309,7 @@ public class AdminController {
         model.addAttribute("links", links);
         model.addAttribute("adminToken", adminToken);
         if (!model.containsAttribute("addParticipantForm")) {
-            model.addAttribute("addParticipantForm", new AddParticipantForm("", ""));
+            model.addAttribute("addParticipantForm", new AddParticipantForm("", "", ""));
         }
         if (!model.containsAttribute("exclusionGroupForm")) {
             model.addAttribute("exclusionGroupForm", new ExclusionGroupForm("", List.of()));
@@ -289,6 +323,29 @@ public class AdminController {
 
     private static String normalizedName(String name) {
         return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean hasEmail(String email) {
+        return email != null && !email.isBlank();
+    }
+
+    private static String emailStatusLabel(
+            String email, int drawCount, NotificationStatus status) {
+        if (!hasEmail(email)) {
+            return "Sem e-mail";
+        }
+        if (drawCount == 0) {
+            return "Aguardando sorteio";
+        }
+        if (status == null) {
+            return "Não enfileirado";
+        }
+        return switch (status) {
+            case PENDING -> "Pendente";
+            case SENT -> "Enviado";
+            case FAILED -> "Falhou";
+            case SKIPPED -> "Ignorado";
+        };
     }
 
     @PostMapping("/admin/{adminToken}/delete")

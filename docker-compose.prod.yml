@@ -39,6 +39,13 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       APP_BASE_URL: https://${DOMAIN}
       SESSION_COOKIE_SECURE: "true"
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      EMAIL_WORKER_ENABLED: ${EMAIL_WORKER_ENABLED:-true}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_FROM_EMAIL: ${BREVO_FROM_EMAIL:-no-reply@mail.barbosalabs.dev}
+      BREVO_FROM_NAME: ${BREVO_FROM_NAME:-Amigo Secreto}
+      BREVO_REPLY_TO: ${BREVO_REPLY_TO:-}
+      BREVO_SANDBOX: ${BREVO_SANDBOX:-false}
     expose:
       - "8080"
     healthcheck:

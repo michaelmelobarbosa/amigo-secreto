@@ -8,9 +8,11 @@ import br.com.michael.amigosecreto.event.Event;
 import br.com.michael.amigosecreto.event.EventRepository;
 import br.com.michael.amigosecreto.exclusion.ExclusionGroupRepository;
 import br.com.michael.amigosecreto.exclusion.ExclusionGroupService;
+import br.com.michael.amigosecreto.notification.NotificationRepository;
 import br.com.michael.amigosecreto.participant.dto.ParticipantRow;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.Hibernate;
@@ -30,6 +32,9 @@ public class ParticipantService {
     /** Teto de participantes por evento, contando o organizador. */
     public static final int MAX_PARTICIPANTS = 100;
 
+    /** Mesmo limite da coluna: e-mail maior que isso não entra no banco. */
+    public static final int MAX_EMAIL_LENGTH = 254;
+
     private static final String PARTICIPANT_NOT_FOUND = "Participante não encontrado.";
     private static final String EVENT_NOT_FOUND = "Evento não encontrado.";
 
@@ -37,6 +42,7 @@ public class ParticipantService {
     private final EventRepository eventRepository;
     private final AssignmentRepository assignmentRepository;
     private final ExclusionGroupRepository exclusionGroupRepository;
+    private final NotificationRepository notificationRepository;
     private final TokenGenerator tokenGenerator;
 
     public ParticipantService(
@@ -44,11 +50,13 @@ public class ParticipantService {
             EventRepository eventRepository,
             AssignmentRepository assignmentRepository,
             ExclusionGroupRepository exclusionGroupRepository,
+            NotificationRepository notificationRepository,
             TokenGenerator tokenGenerator) {
         this.participantRepository = participantRepository;
         this.eventRepository = eventRepository;
         this.assignmentRepository = assignmentRepository;
         this.exclusionGroupRepository = exclusionGroupRepository;
+        this.notificationRepository = notificationRepository;
         this.tokenGenerator = tokenGenerator;
     }
 
@@ -70,30 +78,49 @@ public class ParticipantService {
     /**
      * O organizador inclui alguém manualmente. Basta o evento estar aberto:
      * fechar as inscrições públicas não impede o painel de completar a lista.
+     *
+     * <p>O e-mail é opcional: só serve para avisar do sorteio e é gravado
+     * normalizado (sem espaços nas pontas, minúsculo).
      */
     @Transactional
-    public Participant addByOrganizer(Event event, String name, String wishlist) {
+    public Participant addByOrganizer(
+            Event event, String name, String email, String wishlist) {
         Event locked = lockEvent(event);
         if (!locked.isOpen()) {
             throw new RuleViolationException(
                     "Participantes só podem ser adicionados antes do sorteio.");
         }
         ensureParticipantLimit(locked);
-        return persist(locked, name, wishlist);
+        return persist(locked, name, email, wishlist);
+    }
+
+    /** Inclusão pelo painel sem e-mail: o aviso do sorteio simplesmente não sai. */
+    @Transactional
+    public Participant addByOrganizer(Event event, String name, String wishlist) {
+        return addByOrganizer(event, name, null, wishlist);
     }
 
     /**
      * Inscrição pelo link de convite: só vale com o evento aberto e as
      * inscrições abertas. O sorteio fecha as inscrições automaticamente.
+     *
+     * <p>O e-mail é opcional e, quando informado, é normalizado antes de
+     * gravar.
      */
     @Transactional
-    public Participant joinByInvite(Event event, String name, String wishlist) {
+    public Participant joinByInvite(Event event, String name, String email, String wishlist) {
         Event locked = lockEvent(event);
         if (!locked.canJoin()) {
             throw new RuleViolationException("As inscrições estão encerradas.");
         }
         ensureParticipantLimit(locked);
-        return persist(locked, name, wishlist);
+        return persist(locked, name, email, wishlist);
+    }
+
+    /** Inscrição pelo link sem e-mail: o participante só acompanha pelo token. */
+    @Transactional
+    public Participant joinByInvite(Event event, String name, String wishlist) {
+        return joinByInvite(event, name, null, wishlist);
     }
 
     /**
@@ -113,6 +140,7 @@ public class ParticipantService {
         if (participant.isOrganizer()) {
             throw new RuleViolationException("O organizador não pode ser removido.");
         }
+        notificationRepository.deleteByParticipantId(participant.getId());
         participantRepository.delete(participant);
         participantRepository.flush();
         exclusionGroupRepository.findByEventIdWithMembers(locked.getId()).stream()
@@ -182,14 +210,35 @@ public class ParticipantService {
         }
     }
 
-    private Participant persist(Event event, String name, String wishlist) {
+    private Participant persist(Event event, String name, String email, String wishlist) {
         Participant participant =
                 new Participant(event, name, tokenGenerator.accessToken(), false);
+        participant.setEmail(normalizeEmail(email));
         participant.setWishlist(normalize(wishlist));
         return participantRepository.save(participant);
     }
 
     private static String normalize(String wishlist) {
         return wishlist == null || wishlist.isBlank() ? null : wishlist;
+    }
+
+    /**
+     * E-mail é identificador de contato, não de acesso: guardar sempre em
+     * minúsculo evita "Ana@x.com" e "ana@x.com" virarem duas pessoas no
+     * reenvio. Texto vazio vira {@code null} para não gravar string em branco.
+     */
+    private static String normalizeEmail(String email) {
+        if (email == null) {
+            return null;
+        }
+        String normalized = email.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        if (normalized.length() > MAX_EMAIL_LENGTH) {
+            throw new RuleViolationException(
+                    "O e-mail deve ter até " + MAX_EMAIL_LENGTH + " caracteres.");
+        }
+        return normalized;
     }
 }

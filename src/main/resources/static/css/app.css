@@ -462,3 +462,12 @@ fieldset.field legend {
     border-color: #94a3b8;
     cursor: not-allowed;
 }
+
+.email-cell {
+    min-width: 12rem;
+    overflow-wrap: anywhere;
+}
+
+.resend-email-form {
+    margin-top: 0.35rem;
+}

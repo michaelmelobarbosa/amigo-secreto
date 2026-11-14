@@ -11,5 +11,8 @@ public record ParticipantRowView(
         boolean organizer,
         Instant firstViewedAt,
         boolean duplicateName,
-        boolean canRemove) {
+        boolean canRemove,
+        String email,
+        String emailStatusLabel,
+        boolean canResendEmail) {
 }

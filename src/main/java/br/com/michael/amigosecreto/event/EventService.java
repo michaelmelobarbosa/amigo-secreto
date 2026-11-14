@@ -4,6 +4,7 @@ import br.com.michael.amigosecreto.common.NotFoundException;
 import br.com.michael.amigosecreto.common.RuleViolationException;
 import br.com.michael.amigosecreto.common.TokenGenerator;
 import br.com.michael.amigosecreto.draw.AssignmentRepository;
+import br.com.michael.amigosecreto.notification.NotificationRepository;
 import br.com.michael.amigosecreto.participant.Participant;
 import br.com.michael.amigosecreto.participant.ParticipantRepository;
 import java.time.Instant;
@@ -23,16 +24,19 @@ public class EventService {
     private final EventRepository eventRepository;
     private final ParticipantRepository participantRepository;
     private final AssignmentRepository assignmentRepository;
+    private final NotificationRepository notificationRepository;
     private final TokenGenerator tokenGenerator;
 
     public EventService(
             EventRepository eventRepository,
             ParticipantRepository participantRepository,
             AssignmentRepository assignmentRepository,
+            NotificationRepository notificationRepository,
             TokenGenerator tokenGenerator) {
         this.eventRepository = eventRepository;
         this.participantRepository = participantRepository;
         this.assignmentRepository = assignmentRepository;
+        this.notificationRepository = notificationRepository;
         this.tokenGenerator = tokenGenerator;
     }
 
@@ -133,6 +137,7 @@ public class EventService {
             throw new RuleViolationException("O evento já está aberto para edição.");
         }
         assignmentRepository.deleteByEventId(event.getId());
+        notificationRepository.deleteByEventId(event.getId());
         participantRepository.resetFirstViewedAtByEventId(event.getId());
         event.reopen();
         return event;

@@ -1,5 +1,15 @@
 app:
   base-url: ${APP_BASE_URL:http://localhost:8080}
+  email:
+    enabled: ${EMAIL_ENABLED:false}
+    from-email: ${BREVO_FROM_EMAIL:no-reply@mail.barbosalabs.dev}
+    from-name: ${BREVO_FROM_NAME:Amigo Secreto}
+    reply-to: ${BREVO_REPLY_TO:}
+    worker-enabled: ${EMAIL_WORKER_ENABLED:true}
+    worker-delay: ${EMAIL_WORKER_DELAY:30000}
+    brevo:
+      api-key: ${BREVO_API_KEY:}
+      sandbox: ${BREVO_SANDBOX:true}
 
 spring:
   application:

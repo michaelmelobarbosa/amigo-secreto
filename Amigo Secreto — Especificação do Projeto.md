@@ -371,7 +371,7 @@ Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados 
 
 | Tema | Situação |
 | --- | --- |
-| Domínio e HTTPS | A definir antes de qualquer uso real na internet e obrigatório para a fase 2 de e-mail. Um único domínio serve app e e-mail (subdomínio). Até lá, rede local ou túnel |
+| Domínio e HTTPS | Definido: app em `amigo-secreto.barbosalabs.dev` e envio em `mail.barbosalabs.dev` (subdomínio autenticado no Brevo). Resta aplicar o DNS e o `.env` na VPS |
 
 ## 14. Histórico de decisões
 
@@ -380,17 +380,18 @@ Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados 
 - 2026-11-13: preparação para e-mail no MVP: `LinkBuilder` com `app.base-url` e `DrawCompletedEvent` após o commit, sem coluna/provider/tabela de e-mail agora.
 - 2026-11-13: Flyway desde a V1 com `ddl-auto=validate`; `update` não é usado.
 - 2026-11-13: decisões de MVP confirmadas: organizador participa; apagar evento com confirmação; sem edição de nome de participante; CSRF por token de sessão; H2 nos testes; nomes duplicados permitidos com aviso; wishlist fora do painel; fuso convertido na borda.
+- 2026-11-14: fase 2 implementada com Brevo, outbox `notification`, worker com retry/idempotência, e-mail opcional no join e na adição manual, status/reenvio no painel e envio real validado. Dedupe por e-mail continua fora desta versão.
 
-## 15. Fase 2 — e-mail (planejado)
+## 15. Fase 2 — e-mail (implementado)
 
 Guia operacional detalhado: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
 
-O MVP **não envia e-mail**. A entrega dos links é manual: copiar e compartilhar no WhatsApp (`wa.me`). O e-mail entra depois, como canal opcional de entrega, sem virar login e sem ser obrigatório.
+A fase 2 está implementada: o e-mail é um canal **opcional** de entrega do link individual, nunca credencial e nunca obrigatório. O caminho manual (`wa.me` e copiar link) continua funcionando. O envio real depende de `EMAIL_ENABLED=true`, `BREVO_SANDBOX=false` e da API key de produção no ambiente.
 
-### O que fica preparado já no MVP
+### O que ficou preparado antes da fase 2
 
-- `LinkBuilder` central com `app.base-url`, gerando links absolutos para painel, participante e convite. Usado pelos botões de copiar/WhatsApp e, depois, pelo e-mail.
-- `DrawService` publica `DrawCompletedEvent` **após o commit** (não dentro da transação). O MVP não tem listener; a fase 2 adiciona um listener de e-mail.
+- `LinkBuilder` central com `app.base-url`, gerando links absolutos para painel, participante e convite. Usado pelos botões de copiar/WhatsApp e pelo e-mail.
+- `DrawService` publica `DrawCompletedEvent` **após o commit** (não dentro da transação). Na época, o MVP não tinha listener; a fase 2 adicionou o listener de e-mail.
 - DTOs nas telas; adicionar `email` e status de entrega depois é aditivo.
 - Nenhuma coluna `email`, tabela de notificação, provider ou template no MVP.
 
@@ -400,18 +401,18 @@ O MVP **não envia e-mail**. A entrega dos links é manual: copiar e compartilha
 - Formulário de join e adição manual com e-mail opcional.
 - Envio do link individual após o sorteio e após refazer; o link não muda, o `drawCount` identifica a nova rodada.
 - Tabela `notification` (ou `email_delivery`): participante, `draw_count`, canal, status, tentativas, id do provedor, último erro, enviado em; único por `(participant, draw_count, channel)` para idempotência.
-- Envio assíncrono com `@TransactionalEventListener(AFTER_COMMIT)` e executor limitado; retentativas; falha de e-mail não desfaz o sorteio.
-- Templates Thymeleaf (HTML + texto), link absoluto via `LinkBuilder`; sem pixel de rastreamento.
-- Painel mostra status de entrega e botão "reenviar".
-- Dedupe por e-mail é melhor esforço: e-mail único por evento quando informado; mensagem neutra em caso de duplicado; não bloquear sem verificação. Caixa compartilhada e dois e-mails para a mesma pessoa são limitações conhecidas.
+- Envio assíncrono: o `DrawService` publica `DrawCompletedEvent` só depois do commit; o listener grava o outbox numa transação nova (`TransactionTemplate` com `REQUIRES_NEW`) e um worker agendado processa os pendentes. Retentativas não desfazem o sorteio.
+- Conteúdo HTML + texto montado por `EmailContentBuilder`, com link absoluto via `LinkBuilder` e HTML escapado; sem pixel de rastreamento.
+- Painel mostra status de entrega e botão "reenviar"; o reenvio gera nova chave de idempotência.
+- Dedupe por e-mail (melhor esforço, sem bloquear) **não foi implementado nesta versão**: dois participantes com o mesmo e-mail recebem dois avisos. Caixa compartilhada e dois e-mails para a mesma pessoa são limitações conhecidas.
 - Sem verificação (double opt-in) na primeira versão. Se a recuperação de link por e-mail virar requisito, adicionar confirmação depois.
-- Privacidade/LGPD: coletar apenas o necessário, informar a finalidade, não expor e-mail em página pública, apagar junto com o evento, não logar e-mail nem token.
+- Privacidade/LGPD: coletar apenas o necessário, informar a finalidade, não expor e-mail em página pública, apagar junto com o evento (cascade) e com a remoção do participante, não logar e-mail nem token.
 
 ### Provedor e domínio
 
 - Recomendação: **Brevo** no plano grátis (300 e-mails/dia, sem prazo; inclui "Sent with Brevo"). **Resend** tem 3.000/mês mas 100/dia, apertado para 100 participantes + refazer. **SMTP2GO** tem 1.000/mês e 200/dia, mas 25/hora até verificar o domínio. **SES** é centavos, mas exige domínio e liberação de produção. Limites conferidos em nov/2026; revalidar antes de implementar.
 - O "domínio" é o **domínio de envio** (From), não necessariamente o da aplicação. Um único domínio resolve os dois: app em `app.exemplo.com` e e-mail em `mail.exemplo.com`, com SPF/DKIM/DMARC no DNS. Não precisa hospedar e-mail.
-- O link no e-mail precisa ser público e HTTPS; isso antecipa o domínio/HTTPS que hoje está fora do MVP.
+- O link no e-mail precisa ser público e HTTPS; em produção usa `https://amigo-secreto.barbosalabs.dev`.
 
 ### O que não entra
 

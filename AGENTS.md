@@ -40,7 +40,7 @@ Pacotes por funcionalidade em `br.com.michael.amigosecreto`: `event`, `participa
 
 ## O que já existe
 
-`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. Todo o resto do MVP ainda não existe.
+`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP e a fase 2 de e-mail estão implementados; falta apenas executar o deploy real na VPS.
 
 ## Agentes do projeto
 
