@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(pageTitle)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title th:text="${pageTitle} + ' · Amigo Secreto'">Amigo Secreto</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="site-header" th:fragment="nav">
+    <div class="container header-content">
+        <a class="brand" th:href="@{/}">Amigo Secreto</a>
+        <nav aria-label="Navegação principal">
+            <a th:href="@{/}">Início</a>
+        </nav>
+    </div>
+</header>
+
+<footer class="site-footer" th:fragment="footer">
+    <div class="container">
+        <p>Organize seu amigo secreto com tranquilidade.</p>
+    </div>
+</footer>
+
+<input type="hidden" name="_csrf" th:value="${_csrf}" th:fragment="csrf">
+
+<div th:fragment="scripts">
+    <script th:src="@{/js/app.js}" defer></script>
+</div>
+</body>
+</html>
