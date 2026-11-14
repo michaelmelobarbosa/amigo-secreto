@@ -1,3 +1,37 @@
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+
 spring:
   application:
     name: amigo-secreto
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/amigo_secreto}
+    username: ${SPRING_DATASOURCE_USERNAME:amigo}
+    password: ${SPRING_DATASOURCE_PASSWORD:amigo}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  web:
+    locale: pt_BR
+    locale-resolver: fixed
+
+server:
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-path: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
