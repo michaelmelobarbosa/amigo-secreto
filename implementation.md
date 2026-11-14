@@ -575,7 +575,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 
 O que ficou conscientemente fora do MVP está detalhado em [`docs/IDEAS.md`](docs/IDEAS.md). Resumo:
 
-- **Rate limiting** em `/events` e `/join`; o teto de 100 e o lock protegem a integridade, não o abuso.
+- **Rate limiting** em `/events`, `/join` e sorteio; o teto de 100 e o lock protegem a integridade, não o abuso. Plano decidido em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md), para executar depois do deploy.
 - **Dashboard em uma transação só**: leituras separadas podem mostrar estado misto por um instante.
 - **Postgres no CI/Testcontainers**: a suíte atual roda em H2; locks/tipos só serão provados no banco real.
 - **Testes de concorrência** (draw × draw, última vaga, rollback de redraw/reopen).

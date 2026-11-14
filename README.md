@@ -145,6 +145,7 @@ Ideias e riscos aceitos estão em [docs/IDEAS.md](docs/IDEAS.md).
 - [Deploy](docs/DEPLOY.md) — VPS, Docker, Caddy, backup.
 - [Ideias e pendências](docs/IDEAS.md) — o que ficou para depois e riscos aceitos.
 - [E-mail com Brevo](docs/EMAIL-BREVO.md) — guia da fase 2: domínio, API, outbox e testes.
+- [Rate limiting](docs/RATE-LIMITING.md) — plano decidido para depois do deploy.
 
 ## Testes
 
