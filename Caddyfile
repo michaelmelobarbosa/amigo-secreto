@@ -1,0 +1,21 @@
+# Proxy reverso de produção do Amigo Secreto.
+# DOMAIN e ACME_EMAIL vêm do ambiente do container (docker-compose.prod.yml / .env).
+# NÃO habilite access log: as URLs contêm tokens de acesso e não podem ir para disco.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Actuator é assunto interno (HEALTHCHECK do container), nunca da internet.
+	@actuator path /actuator /actuator/*
+	respond @actuator 404
+
+	reverse_proxy app:8080
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}
