@@ -26,9 +26,11 @@ Já implementado:
 - Fundação web: CSRF de sessão, `SecurityHeadersFilter`, `GlobalExceptionHandler`, `GlobalBindingAdvice`, `WebConfig`, layout/fragmentos, CSS e JS.
 - Templates `index`, `admin/dashboard`, `join/form`, `join/closed`, `participant/view`, erros 403/404/500.
 - Segurança: cookie `Secure` por padrão (perfil `dev` desativa), headers em todas as rotas dinâmicas, CSP sem inline, `robots.txt`, CSP/`data-confirm`, preview bots não marcam `firstViewedAt`.
+- Deploy: `Dockerfile` multi-stage, `docker-compose.prod.yml` (app + Postgres + Caddy), `Caddyfile`, scripts de backup/restore, `docs/DEPLOY.md`.
+- Portfólio: `README.md`, `docs/IDEAS.md` e CI em `.github/workflows/ci.yml`.
 - Testes do solver, token, link, mapeamento JPA, serviços e fluxos web com MockMvc (106 testes).
 
-Ainda não existe: deploy/Docker, README/IDEAS e a fase 2 de e-mail.
+Ainda não existe: execução real na VPS e a fase 2 de e-mail.
 
 **Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. O Compose ainda não foi executado porque o Docker não está instalado nesta máquina.
 
@@ -41,6 +43,8 @@ Ainda não existe: deploy/Docker, README/IDEAS e a fase 2 de e-mail.
 **Bloco 4 (restrições + sorteio) concluído:** grupos de exclusão no painel, sorteio com `CycleDrawSolver`, refazer e reabrir, resultado na página do participante, publicação de `DrawCompletedEvent` após o commit.
 
 **Bloco 5 (segurança + consistência) concluído:** auditorias de segurança e de JPA, cookie `Secure` por padrão, headers em redirects, CSP + `data-confirm`, `robots.txt`, página 500, escopo da wishlist, nomes duplicados case-insensitive, preview bots, limpeza de grupos degenerados e testes de segurança (106 testes).
+
+**Bloco 6 (deploy + portfólio) concluído em arquivos:** Dockerfile multi-stage, Compose de produção, Caddy/HTTPS, backup/restore, `docs/DEPLOY.md`, README, `docs/IDEAS.md` e CI. A execução real na VPS (build, certificado, restore) continua pendente porque o Docker não está instalado nesta máquina.
 
 ---
 
@@ -526,8 +530,8 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 7. [x] **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
 8. [x] **Acabamento:** CSS próprio, mensagens de erro, estados vazios e página 500.
 9. [x] **Segurança:** headers em todas as rotas dinâmicas, 404 para tokens inválidos, CSRF, CSP, robots e testes de privacidade.
-10. [ ] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso, backup.
-11. [ ] **Portfólio:** README e `docs/IDEAS.md`.
+10. [x] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso e backup (arquivos prontos; execução na VPS pendente).
+11. [x] **Portfólio:** README, `docs/IDEAS.md` e CI.
 12. [ ] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega (spec §15).
 
 ---
@@ -560,4 +564,20 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [x] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
 - [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate` (H2 validado; Postgres pendente no deploy).
 - [x] Testes unitários, de serviço e de integração passando (106 testes).
-- [ ] Deploy Docker/Compose funcional na VPS.
+- [ ] Deploy Docker/Compose funcional na VPS (arquivos prontos; falta executar build, certificado e restore).
+
+---
+
+## 14. Pendências e riscos aceitos
+
+O que ficou conscientemente fora do MVP está detalhado em [`docs/IDEAS.md`](docs/IDEAS.md). Resumo:
+
+- **Rate limiting** em `/events` e `/join`; o teto de 100 e o lock protegem a integridade, não o abuso.
+- **Dashboard em uma transação só**: leituras separadas podem mostrar estado misto por um instante.
+- **Postgres no CI/Testcontainers**: a suíte atual roda em H2; locks/tipos só serão provados no banco real.
+- **Testes de concorrência** (draw × draw, última vaga, rollback de redraw/reopen).
+- **Tokens em texto claro** e `Assignment` em claro no banco: risco aceito do modelo “link = credencial”.
+- **Tokens na URL**: histórico do navegador; `no-store`/`no-referrer` mitigam, não apagam.
+- **E-mail** é fase 2 (spec §15); telefone/WhatsApp API/SMS ficam fora.
+- **CSS próprio** em vez de Pico.css; Pico/HTMX continuam opcionais.
+- **Execução real do deploy** (build, certificado, backup/restore) na VPS.

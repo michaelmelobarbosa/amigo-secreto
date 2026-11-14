@@ -1,0 +1,39 @@
+# Build local: a imagem compila o jar do zero.
+target/
+
+# Controle de versão, metadados e editores.
+.git/
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+.opencode/
+
+# Segredos e configuração da máquina: nunca entram no contexto de build.
+.env
+.env.*
+
+# Operação e documentação (ficam no host, não na imagem).
+docker-compose*.yml
+Dockerfile
+.dockerignore
+Caddyfile
+scripts/
+docs/
+backups/
+README.md
+AGENTS.md
+implementation.md
+*.md
+HELP.md
+*.log
+
+# Scripts de Windows não são usados no build Linux.
+mvnw.cmd
