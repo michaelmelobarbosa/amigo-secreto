@@ -7,10 +7,13 @@ import br.com.michael.amigosecreto.invite.dto.JoinForm;
 import br.com.michael.amigosecreto.participant.Participant;
 import br.com.michael.amigosecreto.participant.ParticipantService;
 import jakarta.validation.Valid;
+import org.springframework.beans.propertyeditors.StringTrimmerEditor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +30,12 @@ public class JoinController {
         this.participantService = participantService;
     }
 
+    /** O e-mail chega com espaços do formulário; valida já sem eles. */
+    @InitBinder("form")
+    public void trimEmail(WebDataBinder binder) {
+        binder.registerCustomEditor(String.class, "email", new StringTrimmerEditor(true));
+    }
+
     @GetMapping("/join/{inviteCode}")
     public String form(@PathVariable String inviteCode, Model model) {
         Event event = eventService.byInviteCode(inviteCode);
@@ -36,7 +45,7 @@ public class JoinController {
             return "join/closed";
         }
         if (!model.containsAttribute("form")) {
-            model.addAttribute("form", new JoinForm("", ""));
+            model.addAttribute("form", new JoinForm("", "", ""));
         }
         return "join/form";
     }
@@ -59,7 +68,8 @@ public class JoinController {
         }
 
         try {
-            Participant participant = participantService.joinByInvite(event, form.name(), form.wishlist());
+            Participant participant = participantService.joinByInvite(
+                    event, form.name(), form.email(), form.wishlist());
             redirectAttributes.addFlashAttribute("message", "Guarde este link: é por ele que você verá o resultado.");
             redirectAttributes.addAttribute("accessToken", participant.getAccessToken());
             return "redirect:/p/{accessToken}";

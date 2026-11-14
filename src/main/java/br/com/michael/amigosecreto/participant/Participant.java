@@ -32,6 +32,10 @@ public class Participant {
     @Column(name = "access_token", nullable = false, unique = true, length = 64)
     private String accessToken;
 
+    /** Opcional: usado só para avisar do sorteio, jamais para identificar. */
+    @Column(length = 254)
+    private String email;
+
     @Column(length = 2000)
     private String wishlist;
 
@@ -72,6 +76,14 @@ public class Participant {
 
     public String getAccessToken() {
         return accessToken;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public String getWishlist() {
