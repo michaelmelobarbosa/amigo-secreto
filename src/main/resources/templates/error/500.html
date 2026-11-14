@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/common :: head('Erro inesperado')}"></head>
+<body>
+<header th:replace="~{fragments/common :: nav}"></header>
+<main class="container content" id="conteudo">
+    <section class="notice" aria-labelledby="page-title">
+        <h1 id="page-title">Algo deu errado</h1>
+        <p>Não foi possível concluir a operação. Tente novamente em instantes.</p>
+        <a class="button" th:href="@{/}">Ir para o início</a>
+    </section>
+</main>
+<footer th:replace="~{fragments/common :: footer}"></footer>
+</body>
+</html>

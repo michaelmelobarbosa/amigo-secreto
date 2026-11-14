@@ -4,40 +4,66 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
-
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class SecurityHeadersFilter extends OncePerRequestFilter {
 
-    @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (!contextPath.isEmpty() && path.startsWith(contextPath)) {
-            path = path.substring(contextPath.length());
-        }
+    private static final String CONTENT_SECURITY_POLICY = """
+            default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; \
+            font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; \
+            form-action 'self'; frame-ancestors 'none'
+            """.replace("\\", " ").replaceAll("\\s+", " ").trim();
 
-        if (isSensitivePath(path)) {
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
+
+        String path = pathOf(request);
+        if (!isStaticAsset(path)) {
             response.setHeader("Cache-Control", "no-store");
             response.setHeader("Pragma", "no-cache");
             response.setHeader("Referrer-Policy", "no-referrer");
             response.setHeader("X-Content-Type-Options", "nosniff");
             response.setHeader("X-Frame-Options", "DENY");
-            response.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
-            response.setHeader("X-Robots-Tag", "noindex, nofollow");
+            response.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+            if (isSensitive(path)) {
+                response.setHeader("X-Robots-Tag", "noindex, nofollow");
+            }
         }
 
         filterChain.doFilter(request, response);
     }
 
-    private boolean isSensitivePath(String path) {
-        return path.startsWith("/admin/") || path.startsWith("/p/") || path.startsWith("/join/");
+    private String pathOf(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (!contextPath.isEmpty() && path.startsWith(contextPath)) {
+            return path.substring(contextPath.length());
+        }
+        return path;
+    }
+
+    private boolean isStaticAsset(String path) {
+        return path.startsWith("/css/")
+                || path.startsWith("/js/")
+                || path.startsWith("/images/")
+                || path.startsWith("/webjars/")
+                || path.equals("/favicon.ico")
+                || path.equals("/robots.txt")
+                || path.startsWith("/actuator/");
+    }
+
+    private boolean isSensitive(String path) {
+        return path.startsWith("/admin/")
+                || path.startsWith("/p/")
+                || path.startsWith("/join/");
     }
 }
