@@ -20,7 +20,11 @@ public class LinkBuilder {
     }
 
     public String participant(Participant participant) {
-        return baseUrl + "/p/" + participant.getAccessToken();
+        return participant(participant.getAccessToken());
+    }
+
+    public String participant(String accessToken) {
+        return baseUrl + "/p/" + accessToken;
     }
 
     public String join(Event event) {
