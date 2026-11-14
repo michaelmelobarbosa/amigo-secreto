@@ -8,6 +8,8 @@
     <div class="alert alert-success" role="status" th:if="${created}">
         <strong>Evento criado.</strong> Guarde os três links abaixo. O link do painel é a única forma de voltar aqui.
     </div>
+    <div class="alert alert-success" role="status" th:if="${message}" th:text="${message}"></div>
+    <div class="alert alert-error" role="alert" th:if="${error}" th:text="${error}"></div>
 
     <section class="card" th:if="${created}">
         <h2>Seus links</h2>
@@ -46,11 +48,11 @@
             </div>
             <div>
                 <dt>Valor sugerido</dt>
-                <dd th:text="${event.suggestedValue == null ? 'Sem valor definido' : event.suggestedValue}">R$ 50,00</dd>
+                <dd th:text="${event.suggestedValue == null ? 'Sem valor definido' : #numbers.formatCurrency(event.suggestedValue)}">R$ 50,00</dd>
             </div>
             <div>
                 <dt>Participantes</dt>
-                <dd th:text="${event.participantCount}">1</dd>
+                <dd th:text="|${event.participantCount} de ${event.maxParticipants}|">1 de 100</dd>
             </div>
             <div>
                 <dt>Sorteios realizados</dt>
@@ -61,12 +63,25 @@
 
     <section class="card">
         <h2>Link de convite</h2>
-        <p class="muted">Envie para cada pessoa no privado. Quem abrir o convite vê apenas os dados do evento, nunca a lista de participantes.</p>
+        <p class="muted">Envie para cada pessoa no privado. O convite não mostra a lista de participantes.</p>
         <div class="link-row">
             <code th:text="${event.inviteUrl}">/join/...</code>
             <button class="button secondary" type="button" th:attr="data-copy=${event.inviteUrl}">Copiar</button>
             <a class="button secondary" th:href="${event.inviteWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
         </div>
+        <div class="row-actions" th:if="${event.canEdit}">
+            <form th:action="@{/admin/{token}/registration(token=${adminToken})}" method="post">
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <input type="hidden" name="open" th:value="${!event.registrationOpen}">
+                <button class="button secondary" type="submit"
+                        th:text="${event.registrationOpen ? 'Encerrar inscrições' : 'Abrir inscrições'}">Encerrar inscrições</button>
+            </form>
+        </div>
+        <form th:action="@{/admin/{token}/invite/regenerate(token=${adminToken})}" method="post">
+            <div th:replace="~{fragments/common :: csrf}"></div>
+            <button class="button secondary" type="submit">Gerar novo link de convite</button>
+        </form>
+        <p class="muted" th:if="${event.canEdit and !event.registrationOpen}">As inscrições estão encerradas; você pode reabri-las enquanto o evento não for sorteado.</p>
     </section>
 
     <section class="card">
@@ -76,13 +91,14 @@
             Há nomes repetidos. Confira com o organizador para não sortear a pessoa errada.
         </div>
 
-        <div class="table-wrap">
+        <div class="table-wrap" th:if="${!event.participants.isEmpty()}">
             <table>
                 <thead>
                 <tr>
                     <th scope="col">Nome</th>
                     <th scope="col">Link individual</th>
                     <th scope="col">Já visualizou</th>
+                    <th scope="col">Ação</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -99,19 +115,44 @@
                         </div>
                     </td>
                     <td th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</td>
+                    <td>
+                        <form th:if="${row.canRemove}" th:action="@{/admin/{token}/participants/{id}/delete(token=${adminToken},id=${row.id})}" method="post">
+                            <div th:replace="~{fragments/common :: csrf}"></div>
+                            <button class="button danger" type="submit">Remover</button>
+                        </form>
+                        <span class="muted" th:if="${!row.canRemove and !row.organizer}">Disponível apenas antes dos resultados.</span>
+                        <span class="muted" th:if="${row.organizer}">Não pode ser removido</span>
+                    </td>
                 </tr>
                 </tbody>
             </table>
         </div>
+        <p class="muted" th:if="${event.participants.isEmpty()}">Ainda não há participantes. Convide alguém ou adicione pelo formulário abaixo.</p>
 
-        <p class="muted" th:if="${event.participantCount == 1}">
-            Só o organizador está inscrito por enquanto. Adicionar e remover participantes entra no próximo passo.
-        </p>
+        <div class="subsection" th:if="${event.canAddParticipant}">
+            <h3>Adicionar participante</h3>
+            <form th:action="@{/admin/{token}/participants(token=${adminToken})}" th:object="${addParticipantForm}" method="post">
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <div class="field">
+                    <label for="participant-name">Nome</label>
+                    <input id="participant-name" type="text" th:field="*{name}" maxlength="80" required autocomplete="name">
+                    <p class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Erro no nome</p>
+                </div>
+                <div class="field">
+                    <label for="participant-wishlist">Lista de desejos (opcional)</label>
+                    <textarea id="participant-wishlist" th:field="*{wishlist}" maxlength="2000" rows="4"></textarea>
+                    <p class="field-error" th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>
+                </div>
+                <button class="button" type="submit">Adicionar</button>
+            </form>
+        </div>
+        <p class="muted" th:if="${event.canEdit and !event.canAddParticipant}">O limite de 100 participantes foi atingido.</p>
+        <p class="muted" th:if="${!event.canEdit}">A lista fica bloqueada depois que os resultados forem definidos.</p>
     </section>
 
     <section class="card">
         <h2>Seu link como participante</h2>
-        <p class="muted">Este é o link que mostra o seu resultado. O painel nunca mostra quem tirou quem.</p>
+        <p class="muted">Este link mostra apenas o seu resultado. O painel não exibe quem tirou quem.</p>
         <div class="link-row">
             <code th:text="${event.organizerParticipantUrl}">/p/...</code>
             <button class="button secondary" type="button" th:attr="data-copy=${event.organizerParticipantUrl}">Copiar</button>

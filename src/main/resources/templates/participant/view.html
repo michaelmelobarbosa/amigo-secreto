@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/common :: head('Sua página do amigo secreto')}"></head>
+<body>
+<header th:replace="~{fragments/common :: nav}"></header>
+
+<main class="container content" id="conteudo">
+    <div class="alert alert-success" role="status" th:if="${message}" th:text="${message}"></div>
+    <div class="alert alert-error" role="alert" th:if="${error}" th:text="${error}"></div>
+
+    <section class="card">
+        <p class="eyebrow">Sua página</p>
+        <h1 th:text="${page.eventName}">Amigo secreto</h1>
+        <p>Olá, <strong th:text="${page.ownName}">Ana</strong>.</p>
+
+        <dl class="details">
+            <div>
+                <dt>Data</dt>
+                <dd th:text="${page.eventDate == null ? 'A definir' : #temporals.format(page.eventDate, 'dd/MM/yyyy')}">24/12/2026</dd>
+            </div>
+            <div>
+                <dt>Valor sugerido</dt>
+                <dd th:text="${page.suggestedValue == null ? 'Sem valor definido' : #numbers.formatCurrency(page.suggestedValue)}">R$ 50,00</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="card" th:if="${page.drawn}">
+        <h2>Seu resultado</h2>
+        <p th:if="${page.receiverName != null}">Você tirou: <strong th:text="${page.receiverName}">Fulano</strong></p>
+        <p class="muted" th:if="${page.receiverName == null}">Seu resultado ainda não está disponível. Tente novamente mais tarde.</p>
+        <div class="wishlist-preview" th:if="${page.receiverName != null and !#strings.isEmpty(page.receiverWishlist)}">
+            <h3>Lista de desejos de quem você tirou</h3>
+            <p class="preserve-lines" th:text="${page.receiverWishlist}">Livro ou um jogo de tabuleiro.</p>
+        </div>
+        <p class="muted" th:if="${page.receiverName != null and #strings.isEmpty(page.receiverWishlist)}">Essa pessoa ainda não informou uma lista de desejos.</p>
+        <div class="alert alert-warning" role="status" th:if="${page.redrawn}">
+            O sorteio foi refeito em <span th:text="${page.drawnAtLabel}">13/11</span>.
+        </div>
+    </section>
+
+    <section class="card" th:unless="${page.drawn}">
+        <h2>Aguarde o sorteio</h2>
+        <p>O organizador ainda não realizou o sorteio. Volte a este link depois para ver seu resultado.</p>
+    </section>
+
+    <section class="card">
+        <h2>Sua lista de desejos</h2>
+        <p class="muted">Só você e a pessoa que tirar você poderão ver esta lista.</p>
+        <form th:action="@{/p/{token}/wishlist(token=${accessToken})}" th:object="${form}" method="post">
+            <div th:replace="~{fragments/common :: csrf}"></div>
+            <div class="field">
+                <label for="own-wishlist">O que você gostaria de ganhar? (opcional)</label>
+                <textarea id="own-wishlist" th:field="*{wishlist}" maxlength="2000" rows="5"></textarea>
+                <p class="field-error" th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>
+            </div>
+            <button class="button" type="submit">Salvar lista</button>
+        </form>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/common :: footer}"></footer>
+<div th:replace="~{fragments/common :: scripts}"></div>
+</body>
+</html>

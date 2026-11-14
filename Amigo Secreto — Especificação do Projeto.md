@@ -94,6 +94,7 @@ Assignment
 - Mínimo para sortear: **3 participantes sem nenhum grupo de exclusão** e **4 participantes quando existe pelo menos um grupo**. Em um ciclo de 3 pessoas todos os três pares são adjacentes; qualquer par proibido torna o sorteio impossível. Com 4 ou mais, o mínimo é condição necessária, não garantia: a viabilidade real é verificada pelo algoritmo.
 - Participantes pertencem a um único evento. Um `ExclusionGroup` só contém participantes do mesmo evento.
 - Exatamente um participante com `organizer = true` por evento, criado junto com o evento.
+- O participante organizador não pode ser removido no MVP; removê-lo quebraria o vínculo entre painel e sorteio.
 - Inscrição pelo convite só é aceita com o evento em `OPEN` e `registrationOpen = true`. O sorteio fecha as inscrições automaticamente. Teto de 100 participantes por evento.
 - Depois de `DRAWN`, participantes e grupos de exclusão não podem ser alterados. Para mexer neles, o organizador usa "Reabrir e editar" (volta para `OPEN` e apaga os `Assignment`). A wishlist continua editável sempre.
 
@@ -173,7 +174,7 @@ A tela de sucesso mostra três links: o painel (`/admin/{adminToken}`), a págin
 
 - Dados do evento.
 - Link de convite em destaque, com copiar, compartilhar no WhatsApp, abrir ou fechar inscrições e regenerar o código.
-- Lista de participantes, com para cada um: nome, link individual (botão copiar e botão WhatsApp), indicador "já visualizou" e a ação de remover (enquanto `OPEN`).
+- Lista de participantes, com para cada um: nome, link individual (botão copiar e botão WhatsApp), indicador "já visualizou" e a ação de remover (enquanto `OPEN`, exceto o organizador).
 - Formulário para adicionar participante manualmente.
 - Seção "Restrições": lista de grupos de exclusão, com remover, e botão para criar um novo (checkboxes com os participantes).
 - Botão "Sortear", que só habilita com 3 participantes sem restrições ou 4 com pelo menos um grupo de exclusão. Mostra erro claro se o sorteio for inviável.
