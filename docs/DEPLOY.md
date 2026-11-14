@@ -100,6 +100,10 @@ outro conjunto de migrações e mudaria o comportamento que a spec trata como cr
 [`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh) e
 [`scripts/restore-postgres.sh`](../scripts/restore-postgres.sh) dependem de `docker compose exec db`.
 
+Quando a VPS passar a hospedar mais de uma aplicação, a mesma lógica vale **entre projetos**: um
+Postgres por app, não um banco compartilhado. Custo e justificativa estão em
+[`INFRA-VPS.md#banco-de-dados-um-postgres-por-projeto`](./INFRA-VPS.md#banco-de-dados-um-postgres-por-projeto).
+
 ### D2. Só o Caddy publica portas
 
 | Opção | Resultado |
