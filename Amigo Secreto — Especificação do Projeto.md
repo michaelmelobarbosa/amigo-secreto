@@ -383,6 +383,8 @@ Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados 
 
 ## 15. Fase 2 — e-mail (planejado)
 
+Guia operacional detalhado: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
+
 O MVP **não envia e-mail**. A entrega dos links é manual: copiar e compartilhar no WhatsApp (`wa.me`). O e-mail entra depois, como canal opcional de entrega, sem virar login e sem ser obrigatório.
 
 ### O que fica preparado já no MVP

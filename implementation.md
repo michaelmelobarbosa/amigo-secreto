@@ -532,7 +532,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 9. [x] **Segurança:** headers em todas as rotas dinâmicas, 404 para tokens inválidos, CSRF, CSP, robots e testes de privacidade.
 10. [x] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso e backup (arquivos prontos; execução na VPS pendente).
 11. [x] **Portfólio:** README, `docs/IDEAS.md` e CI.
-12. [ ] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega (spec §15).
+12. [ ] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega. Guia: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
 
 ---
 
