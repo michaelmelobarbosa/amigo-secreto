@@ -13,7 +13,12 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
 
     long countByEvent_Id(UUID eventId);
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    /**
+     * Apaga os resultados do evento em bulk. Não limpa o persistence context:
+     * quem chama (refazer sorteio, reabrir) continua com o event gerenciado e
+     * precisa dele para mudar o estado na mesma transação.
+     */
+    @Modifying(flushAutomatically = true)
     @Query("delete from Assignment a where a.event.id = :eventId")
     int deleteByEventId(@Param("eventId") UUID eventId);
 }
