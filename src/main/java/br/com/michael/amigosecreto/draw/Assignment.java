@@ -27,7 +27,7 @@ import org.hibernate.annotations.Check;
                     name = "uk_assignment_event_receiver",
                     columnNames = {"event_id", "receiver_id"})
         })
-@Check(constraints = "giver_id <> receiver_id")
+@Check(name = "ck_assignment_not_self", constraints = "giver_id <> receiver_id")
 public class Assignment {
 
     @Id

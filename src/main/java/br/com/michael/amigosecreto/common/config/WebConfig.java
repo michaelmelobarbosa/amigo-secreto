@@ -23,6 +23,7 @@ public class WebConfig implements WebMvcConfigurer {
                         "/js/**",
                         "/images/**",
                         "/favicon.ico",
+                        "/robots.txt",
                         "/actuator/**",
                         "/error");
     }

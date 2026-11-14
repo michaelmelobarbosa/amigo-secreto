@@ -18,7 +18,7 @@ Aplicação web para organizar amigo secreto, sem login, com acesso por links co
 | --- | --- |
 | Linguagem | Java (17+) |
 | Framework | Spring Boot enxuto: `webmvc`, `data-jpa`, `validation`, `thymeleaf`. Sem Spring Security |
-| Frontend | Thymeleaf (renderização no servidor) + Pico.css + HTMX opcional. Sem SPA |
+| Frontend | Thymeleaf (renderização no servidor) + CSS próprio minimalista. Pico.css e HTMX ficam opcionais e não entraram no MVP. Sem SPA |
 | Convites | Sem login, dois tipos de link: o link público de convite do evento (`/join/{inviteCode}`), forma principal de entrada, e o link individual de cada participante (`/p/{accessToken}`), que dá acesso ao resultado. O organizador também pode adicionar pessoas manualmente. **MVP sem e-mail:** a entrega é manual (copiar/WhatsApp). E-mail é fase 2, opcional e sem virar login (seção 15) |
 | Recuperação de link | O painel sempre permite copiar o link de cada participante |
 | Preparação para e-mail | `LinkBuilder` com `app.base-url` e `DrawCompletedEvent` após o commit desde o MVP. Sem coluna `email`, tabela de notificação, provider ou template no MVP (seção 15) |
@@ -92,7 +92,7 @@ Assignment
 - Todos dão e recebem exatamente uma vez: cada participante aparece uma vez como `giver` e uma vez como `receiver`.
 - Restrições de exclusão são regras rígidas, não preferências: um par proibido nunca pode aparecer no resultado. Não existe sorteio "com peso" no MVP.
 - Mínimo para sortear: **3 participantes sem nenhum grupo de exclusão** e **4 participantes quando existe pelo menos um grupo**. Em um ciclo de 3 pessoas todos os três pares são adjacentes; qualquer par proibido torna o sorteio impossível. Com 4 ou mais, o mínimo é condição necessária, não garantia: a viabilidade real é verificada pelo algoritmo.
-- Participantes pertencem a um único evento. Um `ExclusionGroup` só contém participantes do mesmo evento.
+- Participantes pertencem a um único evento. Um `ExclusionGroup` só contém participantes do mesmo evento. Se a remoção de um participante deixar um grupo com menos de 2 membros, o grupo é apagado.
 - Exatamente um participante com `organizer = true` por evento, criado junto com o evento.
 - O participante organizador não pode ser removido no MVP; removê-lo quebraria o vínculo entre painel e sorteio.
 - Inscrição pelo convite só é aceita com o evento em `OPEN` e `registrationOpen = true`. O sorteio fecha as inscrições automaticamente. Teto de 100 participantes por evento.
@@ -189,7 +189,7 @@ A tela de sucesso mostra três links: o painel (`/admin/{adminToken}`), a págin
 
 - Antes do sorteio: mensagem de espera, dados do evento e campo de wishlist editável.
 - Depois do sorteio: "Você tirou: **Fulano**", wishlist dele(a), e a própria wishlist editável. Se o sorteio foi refeito, mostra "Sorteio refeito em dd/mm".
-- Na primeira abertura após o sorteio, registra `firstViewedAt`.
+- Na primeira abertura após o sorteio, registra `firstViewedAt`. Robôs de prévia de link (WhatsApp, Telegram, Slack etc.) não contam como visualização.
 
 ### 6.4 Entrada pelo link de convite (`/join/{inviteCode}`)
 
@@ -231,7 +231,9 @@ Use POST para remoções (formulários HTML não têm DELETE) e proteja contra C
 
 - Todo acesso é validado por token. Token inexistente retorna 404 (não 403), para não confirmar a existência.
 - Os tokens do admin, do convite e dos participantes são distintos. Os dois últimos não dão acesso ao painel.
-- Rotas `/p/**`, `/join/**` e `/admin/**` com `Cache-Control: no-store` e `Referrer-Policy: no-referrer`, para o token não vazar para terceiros.
+- Rotas `/p/**`, `/join/**` e `/admin/**` com `Cache-Control: no-store` e `Referrer-Policy: no-referrer`, para o token não vazar para terceiros. Os headers de segurança também cobrem `/` e `/events` (o redirect de criação carrega o token do painel).
+- `robots.txt` bloqueia indexação; CSP restritiva (`script-src 'self'`, `frame-ancestors 'none'`); `X-Content-Type-Options`, `X-Frame-Options` e `X-Robots-Tag` nas rotas sensíveis.
+- Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` por padrão. O perfil `dev` desativa `Secure` para rodar em HTTP local; produção exige HTTPS.
 - O convite é público: limite de tamanho nos campos, teto de participantes por evento e, na fase 2, rate limiting por IP.
 - Validação de entrada com Bean Validation e escape automático do Thymeleaf contra XSS. Proteção CSRF com token de sessão próprio em todos os POSTs.
 - Apagar evento exige CSRF e confirmação explícita; a operação é irreversível.

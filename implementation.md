@@ -24,10 +24,11 @@ Já implementado:
 - `ParticipantService` (adicionar, entrar por convite, remover, wishlist, primeira visualização, resultado e projeções), `JoinController` e `ParticipantController`.
 - `ExclusionGroupService` (criar, remover e projetar grupos), `DrawService` (sortear/refazer), `DrawCompletedEvent` e `DrawConfig`.
 - Fundação web: CSRF de sessão, `SecurityHeadersFilter`, `GlobalExceptionHandler`, `GlobalBindingAdvice`, `WebConfig`, layout/fragmentos, CSS e JS.
-- Templates `index`, `admin/dashboard`, `join/form`, `join/closed`, `participant/view`, erros 403/404.
-- Testes do solver, token, link, mapeamento JPA, serviços e fluxos web com MockMvc (87 testes).
+- Templates `index`, `admin/dashboard`, `join/form`, `join/closed`, `participant/view`, erros 403/404/500.
+- Segurança: cookie `Secure` por padrão (perfil `dev` desativa), headers em todas as rotas dinâmicas, CSP sem inline, `robots.txt`, CSP/`data-confirm`, preview bots não marcam `firstViewedAt`.
+- Testes do solver, token, link, mapeamento JPA, serviços e fluxos web com MockMvc (106 testes).
 
-Ainda não existe: deploy/Docker, README/IDEAS, auditoria final de segurança e a fase 2 de e-mail.
+Ainda não existe: deploy/Docker, README/IDEAS e a fase 2 de e-mail.
 
 **Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. O Compose ainda não foi executado porque o Docker não está instalado nesta máquina.
 
@@ -37,7 +38,9 @@ Ainda não existe: deploy/Docker, README/IDEAS, auditoria final de segurança e 
 
 **Bloco 3 (participantes + convite) concluído:** adicionar/remover participantes, entrada por convite, abrir/fechar inscrições, regenerar código, wishlist e página do participante (espera/resultado quando houver `Assignment`).
 
-**Bloco 4 (restrições + sorteio) concluído:** grupos de exclusão no painel, sorteio com `CycleDrawSolver`, refazer e reabrir, resultado na página do participante, publicação de `DrawCompletedEvent` após o commit. 87 testes verdes.
+**Bloco 4 (restrições + sorteio) concluído:** grupos de exclusão no painel, sorteio com `CycleDrawSolver`, refazer e reabrir, resultado na página do participante, publicação de `DrawCompletedEvent` após o commit.
+
+**Bloco 5 (segurança + consistência) concluído:** auditorias de segurança e de JPA, cookie `Secure` por padrão, headers em redirects, CSP + `data-confirm`, `robots.txt`, página 500, escopo da wishlist, nomes duplicados case-insensitive, preview bots, limpeza de grupos degenerados e testes de segurança (106 testes).
 
 ---
 
@@ -521,8 +524,8 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 5. [x] **Grupos de exclusão:** modelo, serviço e tela com checkboxes.
 6. [x] **Sorteio:** `DrawService` + `DrawCompletedEvent`, integração no painel, refazer e reabrir.
 7. [x] **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
-8. [ ] **Acabamento:** Pico.css, mensagens de erro, estados vazios.
-9. [ ] **Segurança:** headers, 404 para tokens inválidos, CSRF, testes de privacidade.
+8. [x] **Acabamento:** CSS próprio, mensagens de erro, estados vazios e página 500.
+9. [x] **Segurança:** headers em todas as rotas dinâmicas, 404 para tokens inválidos, CSRF, CSP, robots e testes de privacidade.
 10. [ ] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso, backup.
 11. [ ] **Portfólio:** README e `docs/IDEAS.md`.
 12. [ ] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega (spec §15).
@@ -554,7 +557,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [x] Reabrir evento apagando assignments e reabrindo inscrições.
 - [x] Página do participante mostrando apenas o próprio resultado e permitindo editar wishlist.
 - [x] Painel nunca expõe quem tirou quem.
-- [ ] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
-- [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate`.
-- [x] Testes unitários, de serviço e de integração passando (87 testes).
+- [x] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
+- [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate` (H2 validado; Postgres pendente no deploy).
+- [x] Testes unitários, de serviço e de integração passando (106 testes).
 - [ ] Deploy Docker/Compose funcional na VPS.

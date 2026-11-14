@@ -20,10 +20,6 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
     Optional<Event> findByAdminTokenForUpdate(@Param("adminToken") String adminToken);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select e from Event e where e.inviteCode = :inviteCode")
-    Optional<Event> findByInviteCodeForUpdate(@Param("inviteCode") String inviteCode);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from Event e where e.id = :id")
     Optional<Event> findByIdForUpdate(@Param("id") UUID id);
 

@@ -6,6 +6,8 @@ import br.com.michael.amigosecreto.common.TokenGenerator;
 import br.com.michael.amigosecreto.draw.AssignmentRepository;
 import br.com.michael.amigosecreto.event.Event;
 import br.com.michael.amigosecreto.event.EventRepository;
+import br.com.michael.amigosecreto.exclusion.ExclusionGroupRepository;
+import br.com.michael.amigosecreto.exclusion.ExclusionGroupService;
 import br.com.michael.amigosecreto.participant.dto.ParticipantRow;
 import java.time.Instant;
 import java.util.List;
@@ -34,16 +36,19 @@ public class ParticipantService {
     private final ParticipantRepository participantRepository;
     private final EventRepository eventRepository;
     private final AssignmentRepository assignmentRepository;
+    private final ExclusionGroupRepository exclusionGroupRepository;
     private final TokenGenerator tokenGenerator;
 
     public ParticipantService(
             ParticipantRepository participantRepository,
             EventRepository eventRepository,
             AssignmentRepository assignmentRepository,
+            ExclusionGroupRepository exclusionGroupRepository,
             TokenGenerator tokenGenerator) {
         this.participantRepository = participantRepository;
         this.eventRepository = eventRepository;
         this.assignmentRepository = assignmentRepository;
+        this.exclusionGroupRepository = exclusionGroupRepository;
         this.tokenGenerator = tokenGenerator;
     }
 
@@ -109,6 +114,10 @@ public class ParticipantService {
             throw new RuleViolationException("O organizador não pode ser removido.");
         }
         participantRepository.delete(participant);
+        participantRepository.flush();
+        exclusionGroupRepository.findByEventIdWithMembers(locked.getId()).stream()
+                .filter(group -> group.getMembers().size() < ExclusionGroupService.MIN_MEMBERS)
+                .forEach(exclusionGroupRepository::delete);
     }
 
     /**
@@ -117,7 +126,8 @@ public class ParticipantService {
      */
     @Transactional
     public void updateWishlist(Participant participant, String wishlist) {
-        Participant current = participantRepository.findById(participant.getId())
+        Participant current = participantRepository
+                .findByIdAndEvent_Id(participant.getId(), participant.getEvent().getId())
                 .orElseThrow(() -> new NotFoundException(PARTICIPANT_NOT_FOUND));
         current.setWishlist(normalize(wishlist));
         participantRepository.save(current);

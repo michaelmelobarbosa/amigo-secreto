@@ -7,6 +7,7 @@ import br.com.michael.amigosecreto.event.EventRepository;
 import br.com.michael.amigosecreto.event.EventStatus;
 import br.com.michael.amigosecreto.exclusion.ExclusionGroup;
 import br.com.michael.amigosecreto.exclusion.ExclusionGroupRepository;
+import br.com.michael.amigosecreto.exclusion.ExclusionGroupService;
 import br.com.michael.amigosecreto.participant.Participant;
 import br.com.michael.amigosecreto.participant.ParticipantRepository;
 import java.time.Instant;
@@ -126,6 +127,9 @@ public class DrawService {
         Map<UUID, Set<UUID>> forbidden = new HashMap<>();
         for (ExclusionGroup group
                 : exclusionGroupRepository.findByEventIdWithMembers(eventId)) {
+            if (group.getMembers().size() < ExclusionGroupService.MIN_MEMBERS) {
+                continue;
+            }
             List<UUID> members = group.getMembers().stream()
                     .map(Participant::getId)
                     .toList();

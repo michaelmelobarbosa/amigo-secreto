@@ -31,6 +31,4 @@ public record AdminDashboardView(
         boolean drawn,
         boolean redrawn,
         String drawnAtLabel) {
-
-    public static final int MAX_PARTICIPANTS = 100;
 }

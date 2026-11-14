@@ -3,10 +3,13 @@ package br.com.michael.amigosecreto.participant;
 import br.com.michael.amigosecreto.event.Event;
 import br.com.michael.amigosecreto.event.EventStatus;
 import br.com.michael.amigosecreto.participant.dto.ParticipantPageView;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -21,6 +24,22 @@ public class ParticipantController {
 
     private static final ZoneId DISPLAY_ZONE = ZoneId.of("America/Sao_Paulo");
     private static final DateTimeFormatter DRAWN_AT_FORMAT = DateTimeFormatter.ofPattern("dd/MM");
+    private static final List<String> PREVIEW_BOT_MARKERS = List.of(
+            "whatsapp",
+            "telegrambot",
+            "facebookexternalhit",
+            "slackbot",
+            "twitterbot",
+            "linkedinbot",
+            "discordbot",
+            "skypeuripreview",
+            "googlebot",
+            "bingbot",
+            "applebot",
+            "pinterest",
+            "embedly",
+            "redditbot",
+            "snapchat");
 
     private final ParticipantService participantService;
 
@@ -29,10 +48,10 @@ public class ParticipantController {
     }
 
     @GetMapping("/p/{accessToken}")
-    public String view(@PathVariable String accessToken, Model model) {
+    public String view(@PathVariable String accessToken, HttpServletRequest request, Model model) {
         Participant participant = participantService.byAccessToken(accessToken);
         model.addAttribute("accessToken", accessToken);
-        ParticipantPageView page = pageFor(participant, true);
+        ParticipantPageView page = pageFor(participant, !isPreviewBot(request));
         model.addAttribute("page", page);
         if (!model.containsAttribute("form")) {
             model.addAttribute("form", new WishlistForm(page.ownWishlist()));
@@ -91,6 +110,15 @@ public class ParticipantController {
                 receiverWishlist,
                 drawn && event.getDrawCount() > 1,
                 drawnAtLabel);
+    }
+
+    private boolean isPreviewBot(HttpServletRequest request) {
+        String userAgent = request.getHeader("User-Agent");
+        if (userAgent == null || userAgent.isBlank()) {
+            return false;
+        }
+        String normalized = userAgent.toLowerCase(Locale.ROOT);
+        return PREVIEW_BOT_MARKERS.stream().anyMatch(normalized::contains);
     }
 
     public record WishlistForm(
