@@ -20,13 +20,14 @@ Já implementado:
 - Entidades `Event`, `EventStatus`, `Participant`, `ExclusionGroup` e `Assignment`.
 - Repositórios `EventRepository`, `ParticipantRepository`, `ExclusionGroupRepository` e `AssignmentRepository`.
 - `TokenGenerator` (prefixos `adm_`, `inv_`, `p_`), `LinkBuilder`, `AppProperties` e `NotFoundException`.
-- `EventService` (criar, consultar por token, organizador, apagar, inscrições, regenerar convite), `EventController`, `AdminController` e `InviteService`.
+- `EventService` (criar, consultar por token, organizador, apagar, inscrições, regenerar convite, reabrir), `EventController`, `AdminController` e `InviteService`.
 - `ParticipantService` (adicionar, entrar por convite, remover, wishlist, primeira visualização, resultado e projeções), `JoinController` e `ParticipantController`.
+- `ExclusionGroupService` (criar, remover e projetar grupos), `DrawService` (sortear/refazer), `DrawCompletedEvent` e `DrawConfig`.
 - Fundação web: CSRF de sessão, `SecurityHeadersFilter`, `GlobalExceptionHandler`, `GlobalBindingAdvice`, `WebConfig`, layout/fragmentos, CSS e JS.
 - Templates `index`, `admin/dashboard`, `join/form`, `join/closed`, `participant/view`, erros 403/404.
-- Testes do solver, token, link, mapeamento JPA, `EventService`, `ParticipantService` e fluxos web com MockMvc (64 testes).
+- Testes do solver, token, link, mapeamento JPA, serviços e fluxos web com MockMvc (87 testes).
 
-Ainda não existe: grupos de exclusão, sorteio integrado, refazer/reabrir, deploy e Docker.
+Ainda não existe: deploy/Docker, README/IDEAS, auditoria final de segurança e a fase 2 de e-mail.
 
 **Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. O Compose ainda não foi executado porque o Docker não está instalado nesta máquina.
 
@@ -34,7 +35,9 @@ Ainda não existe: grupos de exclusão, sorteio integrado, refazer/reabrir, depl
 
 **Bloco 2 (fundação web + evento) concluído:** CSRF de sessão, headers de privacidade, 404/403, criação de evento, painel com links/participantes, apagar evento e teste HTTP de ponta a ponta.
 
-**Bloco 3 (participantes + convite) concluído:** adicionar/remover participantes, entrada por convite, abrir/fechar inscrições, regenerar código, wishlist e página do participante (espera/resultado quando houver `Assignment`). 64 testes verdes.
+**Bloco 3 (participantes + convite) concluído:** adicionar/remover participantes, entrada por convite, abrir/fechar inscrições, regenerar código, wishlist e página do participante (espera/resultado quando houver `Assignment`).
+
+**Bloco 4 (restrições + sorteio) concluído:** grupos de exclusão no painel, sorteio com `CycleDrawSolver`, refazer e reabrir, resultado na página do participante, publicação de `DrawCompletedEvent` após o commit. 87 testes verdes.
 
 ---
 
@@ -170,19 +173,23 @@ As duas primeiras garantem “todos dão e recebem exatamente uma vez”; a terc
 ### `ParticipantRepository`
 
 - `Optional<Participant> findByAccessToken(String)`
-- `Optional<Participant> findByIdAndEventId(UUID id, UUID eventId)` — escopo anti-IDOR
-- `Optional<Participant> findByEventIdAndOrganizerTrue(UUID eventId)`
-- `long countByEventId(UUID eventId)` — teto de 100
+- `Optional<Participant> findByIdAndEvent_Id(UUID id, UUID eventId)` — escopo anti-IDOR
+- `Optional<Participant> findByEvent_IdAndOrganizerTrue(UUID eventId)`
+- `long countByEvent_Id(UUID eventId)` — teto de 100
+- `List<Participant> findByEvent_Id(UUID eventId)` — insumo do sorteio
+- `int markFirstViewedIfAbsent(UUID id, UUID eventId, Instant at)` — update atômico
+- `int resetFirstViewedAtByEventId(UUID eventId)` — usado no refazer/reabrir
 - Projeção para o painel: `List<ParticipantRow> findRowsByEventId(UUID eventId)` com `id`, `name`, `accessToken`, `organizer`, `firstViewedAt`.
 
 ### `ExclusionGroupRepository`
 
-- `List<ExclusionGroup> findByEventId(UUID eventId)` — com `join fetch` dos membros
-- `Optional<ExclusionGroup> findByIdAndEventId(UUID id, UUID eventId)`
+- `List<ExclusionGroup> findByEvent_Id(UUID eventId)`
+- `Optional<ExclusionGroup> findByIdAndEvent_Id(UUID id, UUID eventId)`
+- `List<ExclusionGroup> findByEventIdWithMembers(UUID eventId)` — `join fetch` dos membros
 
 ### `AssignmentRepository`
 
-- `Optional<Assignment> findByEventIdAndGiverId(UUID eventId, UUID giverId)`
+- `Optional<Assignment> findByEvent_IdAndGiver_Id(UUID eventId, UUID giverId)`
 - `void deleteByEventId(UUID eventId)` — `@Modifying` em bulk; usar `flush`/`clearAutomatically` antes de reinserir no redraw
 - `long countByEventId(UUID eventId)`
 
@@ -220,9 +227,9 @@ Depende de `LinkBuilder`.
 
 - `Event create(CreateEventCommand command)` — `@Transactional`; cria `Event` + participante organizador (`organizer=true`), gerando `adminToken`, `inviteCode` e `accessToken`.
 - `Event byAdminToken(String token)` / `Event byInviteCode(String code)` — lança `NotFoundException` (→ 404).
-- `void setRegistration(Event event, boolean open)` — estado desejado explícito (não toggle); `@Transactional` + lock.
-- `void regenerateInviteCode(Event event)` — `@Transactional` + lock; o código antigo deixa de funcionar.
-- `void reopen(Event event)` — `DRAWN → OPEN`; apaga os `Assignment`, reabre inscrições, zera `firstViewedAt`, mantém `drawCount`.
+- `void setRegistrationByAdminToken(String adminToken, boolean open)` — estado desejado explícito (não toggle); `@Transactional` + lock.
+- `Event regenerateInviteCodeByAdminToken(String adminToken)` — `@Transactional` + lock; o código antigo deixa de funcionar.
+- `Event reopenByAdminToken(String adminToken)` — `DRAWN → OPEN`; apaga os `Assignment`, reabre inscrições, zera `firstViewedAt`, mantém `drawCount`.
 - `Participant organizerOf(Event event)` — busca o participante com `organizer=true`.
 - `void deleteByAdminToken(String adminToken)` — lock pelo token, `deleteByIdBulk` e cascata do banco. `@Transactional`.
 
@@ -239,15 +246,16 @@ Depende de `LinkBuilder`.
 
 ### `ExclusionGroupService`
 
-- `ExclusionGroup create(Event event, String label, Set<UUID> memberIds)` — só `OPEN`; membros do mesmo evento; mínimo 2.
-- `void remove(Event event, UUID groupId)` — só `OPEN`; escopo por evento.
+- `ExclusionGroup create(Event event, String label, Set<UUID> memberIds)` — só `OPEN`; lock; membros do mesmo evento; mínimo 2.
+- `void remove(Event event, UUID groupId)` — só `OPEN`; lock; escopo por evento.
+- `List<ExclusionGroupView> viewsFor(Event event)` — projeção da seção de restrições do painel.
 
 ### `DrawService`
 
-- `void draw(Event event)` — `@Transactional` + lock no evento; exige `OPEN`; monta o mapa de pares proibidos a partir dos grupos; chama `CycleDrawSolver`; persiste `Assignment`; marca `DRAWN`, fecha inscrições, `drawCount=1`, `drawnAt=now`; publica `DrawCompletedEvent` **após o commit**.
-- `void redraw(Event event)` — `@Transactional` + lock; exige `DRAWN`; apaga assignments antigos (`deleteByEventId` + flush); sorteia; `drawCount++`, `drawnAt=now`, zera `firstViewedAt`; publica evento.
-- Traduz `DrawImpossibleException.Reason` para mensagem amigável (`messages.properties`).
-- Nunca envia e-mail dentro da transação; a fase 2 escuta o evento.
+- `void drawByAdminToken(String adminToken)` — `@Transactional` + lock pelo token; exige `OPEN`; monta os pares proibidos dos grupos; chama `CycleDrawSolver`; persiste `Assignment`; `markDrawn` fecha inscrições, grava `drawnAt` e incrementa `drawCount`; publica `DrawCompletedEvent` **após o commit**.
+- `void redrawByAdminToken(String adminToken)` — `@Transactional` + lock; exige `DRAWN`; apaga assignments antigos, zera `firstViewedAt`, sorteia de novo e incrementa `drawCount`; rollback mantém o resultado antigo se o solver falhar.
+- `DrawCompletedEvent` é publicado via `TransactionSynchronization`; sem listener no MVP (a fase 2 escuta para e-mail).
+- `DrawConfig` cria o `CycleDrawSolver` com `SecureRandom`.
 
 ### `DrawCompletedEvent`
 
@@ -510,9 +518,9 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 2. [x] **Domínio e persistência:** entidades, repositórios, `TokenGenerator`, `LinkBuilder`.
 3. [x] **Evento, painel e links:** criação de evento, painel básico, links individuais e apagar evento com confirmação.
 4. [x] **Participantes e convite:** adicionar/remover, `/join/{inviteCode}`, abrir/fechar inscrições, regenerar o código e teto de participantes.
-5. [ ] **Grupos de exclusão:** modelo, serviço e tela com checkboxes.
-6. [ ] **Sorteio:** `DrawService` + `DrawCompletedEvent` (solver já pronto), integração no painel, refazer e reabrir.
-7. [ ] **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
+5. [x] **Grupos de exclusão:** modelo, serviço e tela com checkboxes.
+6. [x] **Sorteio:** `DrawService` + `DrawCompletedEvent`, integração no painel, refazer e reabrir.
+7. [x] **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
 8. [ ] **Acabamento:** Pico.css, mensagens de erro, estados vazios.
 9. [ ] **Segurança:** headers, 404 para tokens inválidos, CSRF, testes de privacidade.
 10. [ ] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso, backup.
@@ -540,13 +548,13 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [x] Apagar evento com confirmação, removendo todos os dados em cascata.
 - [x] Inscrever participantes pelo convite e manualmente, respeitando o teto de 100.
 - [x] Abrir/fechar inscrições e regenerar o código de convite.
-- [ ] Criar e remover grupos de exclusão com validação.
-- [ ] Sortear com ciclo único, restrições rígidas e mensagens claras de impossibilidade.
-- [ ] Refazer sorteio mantendo links, incrementando `drawCount` e zerando `firstViewedAt`.
-- [ ] Reabrir evento apagando assignments e reabrindo inscrições.
-- [ ] Página do participante mostrando apenas o próprio resultado e permitindo editar wishlist.
-- [ ] Painel nunca expõe quem tirou quem.
+- [x] Criar e remover grupos de exclusão com validação.
+- [x] Sortear com ciclo único, restrições rígidas e mensagens claras de impossibilidade.
+- [x] Refazer sorteio mantendo links, incrementando `drawCount` e zerando `firstViewedAt`.
+- [x] Reabrir evento apagando assignments e reabrindo inscrições.
+- [x] Página do participante mostrando apenas o próprio resultado e permitindo editar wishlist.
+- [x] Painel nunca expõe quem tirou quem.
 - [ ] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
 - [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate`.
-- [x] Testes unitários, de serviço e de integração passando (64 testes).
+- [x] Testes unitários, de serviço e de integração passando (87 testes).
 - [ ] Deploy Docker/Compose funcional na VPS.

@@ -96,7 +96,7 @@ Assignment
 - Exatamente um participante com `organizer = true` por evento, criado junto com o evento.
 - O participante organizador não pode ser removido no MVP; removê-lo quebraria o vínculo entre painel e sorteio.
 - Inscrição pelo convite só é aceita com o evento em `OPEN` e `registrationOpen = true`. O sorteio fecha as inscrições automaticamente. Teto de 100 participantes por evento.
-- Depois de `DRAWN`, participantes e grupos de exclusão não podem ser alterados. Para mexer neles, o organizador usa "Reabrir e editar" (volta para `OPEN` e apaga os `Assignment`). A wishlist continua editável sempre.
+- Depois de `DRAWN`, participantes e grupos de exclusão não podem ser alterados. Para mexer neles, o organizador usa "Reabrir e editar" (volta para `OPEN`, apaga os `Assignment` e zera `firstViewedAt`). A wishlist continua editável sempre.
 
 ### Tokens
 
@@ -158,7 +158,7 @@ Assignment
 
 - **Refazer sorteio:** botão no painel, com confirmação ("Todos os resultados atuais serão descartados"). Apaga os `Assignment`, sorteia de novo e mantém `DRAWN`, em uma transação. Os links individuais não mudam: quem abrir depois vê o resultado novo.
 - Como alguém pode já ter visto o resultado antigo, a página do participante mostra "Sorteio refeito em dd/mm" quando `drawCount > 1`. O `firstViewedAt` de todos é zerado.
-- **Reabrir e editar:** volta o evento para `OPEN`, apaga os `Assignment` e reabre as inscrições. É o caminho quando alguém desiste ou entra uma pessoa nova. Depois de editar, o organizador sorteia novamente.
+- **Reabrir e editar:** volta o evento para `OPEN`, apaga os `Assignment`, zera `firstViewedAt`, mantém `drawCount` e reabre as inscrições. É o caminho quando alguém desiste ou entra uma pessoa nova. Depois de editar, o organizador sorteia novamente.
 
 ## 6. Fluxos e telas
 
@@ -311,7 +311,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 - remoção de participante remove ele dos grupos;
 - unicidade dos tokens;
 - refazer sorteio: apaga os `Assignment` antigos, mantém os tokens, zera `firstViewedAt` e incrementa `drawCount`;
-- reabrir evento: volta para `OPEN`, apaga os `Assignment` e reabre as inscrições;
+- reabrir evento: volta para `OPEN`, apaga os `Assignment`, zera `firstViewedAt` e reabre as inscrições;
 - apagar evento: remove participantes, grupos e `Assignment` em cascata;
 - teto de participantes e regeneração do `inviteCode`.
 

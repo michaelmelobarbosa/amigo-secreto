@@ -98,7 +98,7 @@
                     <th scope="col">Nome</th>
                     <th scope="col">Link individual</th>
                     <th scope="col">Já visualizou</th>
-                    <th scope="col">Ação</th>
+                    <th scope="col" th:if="${event.canEdit}">Ação</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -115,12 +115,11 @@
                         </div>
                     </td>
                     <td th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</td>
-                    <td>
+                    <td th:if="${event.canEdit}">
                         <form th:if="${row.canRemove}" th:action="@{/admin/{token}/participants/{id}/delete(token=${adminToken},id=${row.id})}" method="post">
                             <div th:replace="~{fragments/common :: csrf}"></div>
                             <button class="button danger" type="submit">Remover</button>
                         </form>
-                        <span class="muted" th:if="${!row.canRemove and !row.organizer}">Disponível apenas antes dos resultados.</span>
                         <span class="muted" th:if="${row.organizer}">Não pode ser removido</span>
                     </td>
                 </tr>
@@ -148,6 +147,96 @@
         </div>
         <p class="muted" th:if="${event.canEdit and !event.canAddParticipant}">O limite de 100 participantes foi atingido.</p>
         <p class="muted" th:if="${!event.canEdit}">A lista fica bloqueada depois que os resultados forem definidos.</p>
+    </section>
+
+    <section class="card">
+        <h2>Restrições</h2>
+        <p class="muted">Pessoas do mesmo grupo não podem tirar umas às outras.</p>
+
+        <div class="exclusion-groups" th:if="${!event.exclusionGroups.isEmpty()}">
+            <article class="exclusion-group" th:each="group : ${event.exclusionGroups}">
+                <div class="section-heading">
+                    <div>
+                        <h3 th:text="${group.label == null or #strings.isEmpty(#strings.trim(group.label)) ? 'Sem nome' : group.label}">Família</h3>
+                        <ul>
+                            <li th:each="memberName : ${group.memberNames}" th:text="${memberName}">Ana</li>
+                        </ul>
+                    </div>
+                    <form th:if="${event.canManageExclusions}"
+                          th:action="@{/admin/{token}/exclusions/{id}/delete(token=${adminToken},id=${group.id})}"
+                          method="post">
+                        <div th:replace="~{fragments/common :: csrf}"></div>
+                        <button class="button danger" type="submit">Remover</button>
+                    </form>
+                </div>
+            </article>
+        </div>
+        <p class="muted" th:if="${event.exclusionGroups.isEmpty()}">Nenhum grupo de restrição foi criado.</p>
+
+        <div class="subsection" th:if="${event.canManageExclusions}">
+            <h3>Adicionar restrição</h3>
+            <p class="muted" th:if="${event.participants.size() &lt; 2}">Adicione pelo menos mais uma pessoa para criar uma restrição.</p>
+            <form th:if="${event.participants.size() &gt;= 2}"
+                  th:action="@{/admin/{token}/exclusions(token=${adminToken})}"
+                  th:object="${exclusionGroupForm}"
+                  method="post">
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <div class="field">
+                    <label for="exclusion-label">Nome do grupo (opcional)</label>
+                    <input id="exclusion-label" type="text" th:field="*{label}" maxlength="80">
+                    <p class="field-error" th:if="${#fields.hasErrors('label')}" th:errors="*{label}">Erro no nome do grupo</p>
+                </div>
+                <fieldset class="field">
+                    <legend>Participantes do grupo</legend>
+                    <div class="checkbox-list">
+                        <div class="checkbox-option" th:each="participant : ${event.participants}">
+                            <input type="checkbox" name="memberIds" th:id="|member-${participant.id}|"
+                                   th:value="${participant.id}"
+                                   th:checked="${exclusionGroupForm.memberIds.contains(participant.id)}">
+                            <label th:for="|member-${participant.id}|" th:text="${participant.name}">Ana</label>
+                        </div>
+                    </div>
+                    <p class="field-error" th:if="${#fields.hasErrors('memberIds')}" th:errors="*{memberIds}">Selecione pelo menos 2 participantes.</p>
+                </fieldset>
+                <button class="button" type="submit">Criar restrição</button>
+            </form>
+        </div>
+        <p class="alert alert-warning" role="status" th:if="${!event.canManageExclusions}">
+            As restrições ficam bloqueadas depois do sorteio. Reabra o evento para editar.
+        </p>
+    </section>
+
+    <section class="card">
+        <h2>Sorteio</h2>
+        <div th:if="${!event.drawn}">
+            <form th:if="${event.canDraw}"
+                  th:action="@{/admin/{token}/draw(token=${adminToken})}"
+                  method="post"
+                  onsubmit="return confirm('Sortear agora? O resultado será mostrado apenas a cada participante.');">
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <button class="button" type="submit">Sortear</button>
+            </form>
+            <div th:if="${!event.canDraw}">
+                <button class="button" type="button" disabled aria-describedby="draw-disabled-reason">Sortear</button>
+                <p class="muted" id="draw-disabled-reason" th:text="${event.drawDisabledReason}">São necessários pelo menos 3 participantes.</p>
+            </div>
+        </div>
+        <div th:if="${event.drawn}">
+            <p>Sorteio realizado em <strong th:text="${event.drawnAtLabel}">13/11/2026 12:00</strong>.</p>
+            <span class="badge badge-warning" th:if="${event.redrawn}">Sorteio refeito</span>
+            <div class="row-actions">
+                <form th:action="@{/admin/{token}/redraw(token=${adminToken})}" method="post"
+                      onsubmit="return confirm('Refazer o sorteio? Todos os resultados atuais serão descartados.');">
+                    <div th:replace="~{fragments/common :: csrf}"></div>
+                    <button class="button" type="submit">Refazer sorteio</button>
+                </form>
+                <form th:action="@{/admin/{token}/reopen(token=${adminToken})}" method="post"
+                      onsubmit="return confirm('Reabrir para editar? Os resultados atuais serão descartados.');">
+                    <div th:replace="~{fragments/common :: csrf}"></div>
+                    <button class="button secondary" type="submit">Reabrir e editar</button>
+                </form>
+            </div>
+        </div>
     </section>
 
     <section class="card">
