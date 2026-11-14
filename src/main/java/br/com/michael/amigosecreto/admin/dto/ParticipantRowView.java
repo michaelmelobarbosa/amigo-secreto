@@ -10,5 +10,6 @@ public record ParticipantRowView(
         String whatsappUrl,
         boolean organizer,
         Instant firstViewedAt,
-        boolean duplicateName) {
+        boolean duplicateName,
+        boolean canRemove) {
 }

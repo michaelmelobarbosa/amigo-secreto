@@ -1,6 +1,7 @@
 package br.com.michael.amigosecreto.event;
 
 import br.com.michael.amigosecreto.common.NotFoundException;
+import br.com.michael.amigosecreto.common.RuleViolationException;
 import br.com.michael.amigosecreto.common.TokenGenerator;
 import br.com.michael.amigosecreto.participant.Participant;
 import br.com.michael.amigosecreto.participant.ParticipantRepository;
@@ -83,6 +84,34 @@ public class EventService {
     public Participant organizerOf(Event event) {
         return participantRepository.findByEvent_IdAndOrganizerTrue(event.getId())
                 .orElseThrow(() -> new NotFoundException("Organizador não encontrado."));
+    }
+
+    /**
+     * Abre ou fecha as inscrições pelo painel. Só vale antes do sorteio:
+     * depois de {@code DRAWN} as inscrições já estão encerradas por definição.
+     */
+    @Transactional
+    public Event setRegistrationByAdminToken(String adminToken, boolean open) {
+        Event event = eventRepository.findByAdminTokenForUpdate(adminToken)
+                .orElseThrow(() -> new NotFoundException("Evento não encontrado."));
+        if (!event.isOpen()) {
+            throw new RuleViolationException(
+                    "As inscrições só podem ser alteradas antes do sorteio.");
+        }
+        event.setRegistrationOpen(open);
+        return event;
+    }
+
+    /**
+     * Troca o código de convite: o antigo deixa de funcionar e os links
+     * individuais dos participantes continuam válidos.
+     */
+    @Transactional
+    public Event regenerateInviteCodeByAdminToken(String adminToken) {
+        Event event = eventRepository.findByAdminTokenForUpdate(adminToken)
+                .orElseThrow(() -> new NotFoundException("Evento não encontrado."));
+        event.regenerateInviteCode(tokenGenerator.inviteCode());
+        return event;
     }
 
     /**

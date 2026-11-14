@@ -20,18 +20,21 @@ Já implementado:
 - Entidades `Event`, `EventStatus`, `Participant`, `ExclusionGroup` e `Assignment`.
 - Repositórios `EventRepository`, `ParticipantRepository`, `ExclusionGroupRepository` e `AssignmentRepository`.
 - `TokenGenerator` (prefixos `adm_`, `inv_`, `p_`), `LinkBuilder`, `AppProperties` e `NotFoundException`.
-- `EventService` (criar, consultar por token, organizador, apagar), `EventController`, `AdminController` e `InviteService`.
+- `EventService` (criar, consultar por token, organizador, apagar, inscrições, regenerar convite), `EventController`, `AdminController` e `InviteService`.
+- `ParticipantService` (adicionar, entrar por convite, remover, wishlist, primeira visualização, resultado e projeções), `JoinController` e `ParticipantController`.
 - Fundação web: CSRF de sessão, `SecurityHeadersFilter`, `GlobalExceptionHandler`, `GlobalBindingAdvice`, `WebConfig`, layout/fragmentos, CSS e JS.
-- Templates `index`, `admin/dashboard`, erros 403/404.
-- Testes do solver, token, link, mapeamento JPA, `EventService` e fluxo web com MockMvc (30 testes).
+- Templates `index`, `admin/dashboard`, `join/form`, `join/closed`, `participant/view`, erros 403/404.
+- Testes do solver, token, link, mapeamento JPA, `EventService`, `ParticipantService` e fluxos web com MockMvc (64 testes).
 
-Ainda não existe: adicionar/remover participantes, convite/`join`, grupos de exclusão, sorteio integrado, página completa do participante, deploy e Docker.
+Ainda não existe: grupos de exclusão, sorteio integrado, refazer/reabrir, deploy e Docker.
 
 **Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. O Compose ainda não foi executado porque o Docker não está instalado nesta máquina.
 
 **Bloco 1 (domínio) concluído:** entidades e repositórios mapeados; `ddl-auto=validate` passou contra a V1; `LinkBuilder` e `TokenGenerator` testados. O `EventRepository.deleteByIdBulk` foi necessário para apagar o evento sem o Hibernate reclamar de referência transitória; a cascata real fica no banco (`ON DELETE CASCADE`).
 
-**Bloco 2 (fundação web + evento) concluído:** CSRF de sessão, headers de privacidade, 404/403, criação de evento, painel com links/participantes, apagar evento e teste HTTP de ponta a ponta. 30 testes verdes. Adicionar/remover participantes e `/join` ficam no Bloco 3.
+**Bloco 2 (fundação web + evento) concluído:** CSRF de sessão, headers de privacidade, 404/403, criação de evento, painel com links/participantes, apagar evento e teste HTTP de ponta a ponta.
+
+**Bloco 3 (participantes + convite) concluído:** adicionar/remover participantes, entrada por convite, abrir/fechar inscrições, regenerar código, wishlist e página do participante (espera/resultado quando houver `Assignment`). 64 testes verdes.
 
 ---
 
@@ -225,11 +228,14 @@ Depende de `LinkBuilder`.
 
 ### `ParticipantService`
 
+- `Participant byAccessToken(String accessToken)` — busca por token e inicializa o evento (a página lê fora da transação).
+- `List<ParticipantRow> rowsFor(Event event)` — projeção do painel, mantendo o controller fora do repositório.
 - `Participant addByOrganizer(Event event, String name, String wishlist)` — só `OPEN`; lock no evento; respeita o teto de 100.
 - `Participant joinByInvite(Event event, String name, String wishlist)` — só `OPEN && registrationOpen`; lock; teto.
-- `void remove(Event event, UUID participantId)` — só `OPEN`; busca por `id + event`; remove a participação nos grupos.
+- `void remove(Event event, UUID participantId)` — só `OPEN`; busca por `id + event`; não permite remover o organizador; remove a participação nos grupos.
 - `void updateWishlist(Participant participant, String wishlist)` — sempre permitido (antes e depois do sorteio).
-- `void markFirstViewed(Participant participant)` — só depois de `DRAWN` e se `firstViewedAt` for nulo; update atômico (`WHERE first_viewed_at IS NULL`).
+- `void markFirstViewed(Participant participant)` — update atômico (`WHERE first_viewed_at IS NULL`), escopado por evento; a borda só chama quando `DRAWN`.
+- `Optional<ParticipantResult> resultFor(Participant participant)` — quem a pessoa tirou e a wishlist, ou vazio sem `Assignment`.
 
 ### `ExclusionGroupService`
 
@@ -503,7 +509,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 1. [x] **Base:** POM final, Docker Compose com Postgres, Flyway V1, perfis, `ddl-auto=validate`.
 2. [x] **Domínio e persistência:** entidades, repositórios, `TokenGenerator`, `LinkBuilder`.
 3. [x] **Evento, painel e links:** criação de evento, painel básico, links individuais e apagar evento com confirmação.
-4. [ ] **Participantes e convite:** adicionar/remover, `/join/{inviteCode}`, abrir/fechar inscrições, regenerar o código e teto de participantes.
+4. [x] **Participantes e convite:** adicionar/remover, `/join/{inviteCode}`, abrir/fechar inscrições, regenerar o código e teto de participantes.
 5. [ ] **Grupos de exclusão:** modelo, serviço e tela com checkboxes.
 6. [ ] **Sorteio:** `DrawService` + `DrawCompletedEvent` (solver já pronto), integração no painel, refazer e reabrir.
 7. [ ] **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
@@ -532,8 +538,8 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 
 - [x] Criar evento e receber os três links (painel, participante organizador, convite).
 - [x] Apagar evento com confirmação, removendo todos os dados em cascata.
-- [ ] Inscrever participantes pelo convite e manualmente, respeitando o teto de 100.
-- [ ] Abrir/fechar inscrições e regenerar o código de convite.
+- [x] Inscrever participantes pelo convite e manualmente, respeitando o teto de 100.
+- [x] Abrir/fechar inscrições e regenerar o código de convite.
 - [ ] Criar e remover grupos de exclusão com validação.
 - [ ] Sortear com ciclo único, restrições rígidas e mensagens claras de impossibilidade.
 - [ ] Refazer sorteio mantendo links, incrementando `drawCount` e zerando `firstViewedAt`.
@@ -542,5 +548,5 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [ ] Painel nunca expõe quem tirou quem.
 - [ ] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
 - [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate`.
-- [ ] Testes unitários, de serviço e de integração passando.
+- [x] Testes unitários, de serviço e de integração passando (64 testes).
 - [ ] Deploy Docker/Compose funcional na VPS.

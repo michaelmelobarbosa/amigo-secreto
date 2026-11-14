@@ -1,10 +1,12 @@
 package br.com.michael.amigosecreto.participant;
 
 import br.com.michael.amigosecreto.participant.dto.ParticipantRow;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -26,4 +28,22 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
             order by p.name, p.id
             """)
     List<ParticipantRow> findRowsByEventId(@Param("eventId") UUID eventId);
+
+    /**
+     * Grava a primeira visualização só se ela ainda não existir, sem
+     * sobrescrever a data original. O filtro por evento impede que um id de
+     * outro evento seja afetado.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            update Participant p
+            set p.firstViewedAt = :at
+            where p.id = :id
+              and p.event.id = :eventId
+              and p.firstViewedAt is null
+            """)
+    int markFirstViewedIfAbsent(
+            @Param("id") UUID id,
+            @Param("eventId") UUID eventId,
+            @Param("at") Instant at);
 }
