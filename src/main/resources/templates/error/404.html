@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/common :: head('Página não encontrada')}"></head>
+<body>
+<header th:replace="~{fragments/common :: nav}"></header>
+<main class="container content" id="conteudo">
+    <section class="notice" aria-labelledby="page-title">
+        <h1 id="page-title">Página não encontrada</h1>
+        <p>Este link não está disponível. Confira o endereço ou peça um novo link ao organizador.</p>
+        <a class="button" th:href="@{/}">Ir para o início</a>
+    </section>
+</main>
+<footer th:replace="~{fragments/common :: footer}"></footer>
+</body>
+</html>

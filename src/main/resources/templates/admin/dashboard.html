@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/common :: head('Painel do organizador')}"></head>
+<body>
+<header th:replace="~{fragments/common :: nav}"></header>
+
+<main class="container content" id="conteudo">
+    <div class="alert alert-success" role="status" th:if="${created}">
+        <strong>Evento criado.</strong> Guarde os três links abaixo. O link do painel é a única forma de voltar aqui.
+    </div>
+
+    <section class="card" th:if="${created}">
+        <h2>Seus links</h2>
+        <div class="link-row">
+            <span class="link-label">Painel</span>
+            <code th:text="${links.adminUrl}">/admin/...</code>
+            <button class="button secondary" type="button" th:attr="data-copy=${links.adminUrl}">Copiar</button>
+        </div>
+        <div class="link-row">
+            <span class="link-label">Você como participante</span>
+            <code th:text="${links.organizerUrl}">/p/...</code>
+            <button class="button secondary" type="button" th:attr="data-copy=${links.organizerUrl}">Copiar</button>
+            <a class="button secondary" th:href="${links.organizerWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        </div>
+        <div class="link-row">
+            <span class="link-label">Convite</span>
+            <code th:text="${links.inviteUrl}">/join/...</code>
+            <button class="button secondary" type="button" th:attr="data-copy=${links.inviteUrl}">Copiar</button>
+            <a class="button secondary" th:href="${links.inviteWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Evento</p>
+                <h1 th:text="${event.eventName}">Família</h1>
+            </div>
+            <span class="badge" th:text="${event.statusLabel}">Inscrições abertas</span>
+        </div>
+
+        <dl class="details">
+            <div>
+                <dt>Data</dt>
+                <dd th:text="${event.eventDate == null ? 'A definir' : #temporals.format(event.eventDate, 'dd/MM/yyyy')}">24/12/2026</dd>
+            </div>
+            <div>
+                <dt>Valor sugerido</dt>
+                <dd th:text="${event.suggestedValue == null ? 'Sem valor definido' : event.suggestedValue}">R$ 50,00</dd>
+            </div>
+            <div>
+                <dt>Participantes</dt>
+                <dd th:text="${event.participantCount}">1</dd>
+            </div>
+            <div>
+                <dt>Sorteios realizados</dt>
+                <dd th:text="${event.drawCount}">0</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="card">
+        <h2>Link de convite</h2>
+        <p class="muted">Envie para cada pessoa no privado. Quem abrir o convite vê apenas os dados do evento, nunca a lista de participantes.</p>
+        <div class="link-row">
+            <code th:text="${event.inviteUrl}">/join/...</code>
+            <button class="button secondary" type="button" th:attr="data-copy=${event.inviteUrl}">Copiar</button>
+            <a class="button secondary" th:href="${event.inviteWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Participantes</h2>
+
+        <div class="alert alert-warning" role="alert" th:if="${event.hasDuplicateNames}">
+            Há nomes repetidos. Confira com o organizador para não sortear a pessoa errada.
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th scope="col">Nome</th>
+                    <th scope="col">Link individual</th>
+                    <th scope="col">Já visualizou</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="row : ${event.participants}">
+                    <td>
+                        <span th:text="${row.name}">Ana</span>
+                        <span class="badge" th:if="${row.organizer}">Organizador</span>
+                        <span class="badge badge-warning" th:if="${row.duplicateName}">Nome repetido</span>
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="button secondary" type="button" th:attr="data-copy=${row.participantUrl}">Copiar</button>
+                            <a class="button secondary" th:href="${row.whatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+                        </div>
+                    </td>
+                    <td th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <p class="muted" th:if="${event.participantCount == 1}">
+            Só o organizador está inscrito por enquanto. Adicionar e remover participantes entra no próximo passo.
+        </p>
+    </section>
+
+    <section class="card">
+        <h2>Seu link como participante</h2>
+        <p class="muted">Este é o link que mostra o seu resultado. O painel nunca mostra quem tirou quem.</p>
+        <div class="link-row">
+            <code th:text="${event.organizerParticipantUrl}">/p/...</code>
+            <button class="button secondary" type="button" th:attr="data-copy=${event.organizerParticipantUrl}">Copiar</button>
+            <a class="button secondary" th:href="${event.organizerWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        </div>
+    </section>
+
+    <section class="card danger-zone">
+        <h2>Apagar evento</h2>
+        <p class="muted">Remove participantes, grupos e resultados. Não dá para desfazer.</p>
+        <form th:action="@{/admin/{token}/delete(token=${adminToken})}" method="post"
+              onsubmit="return confirm('Apagar o evento e todos os dados? Esta ação não pode ser desfeita.');">
+            <div th:replace="~{fragments/common :: csrf}"></div>
+            <button class="button danger" type="submit">Apagar evento</button>
+        </form>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/common :: footer}"></footer>
+<div th:replace="~{fragments/common :: scripts}"></div>
+</body>
+</html>

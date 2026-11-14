@@ -20,13 +20,18 @@ Já implementado:
 - Entidades `Event`, `EventStatus`, `Participant`, `ExclusionGroup` e `Assignment`.
 - Repositórios `EventRepository`, `ParticipantRepository`, `ExclusionGroupRepository` e `AssignmentRepository`.
 - `TokenGenerator` (prefixos `adm_`, `inv_`, `p_`), `LinkBuilder`, `AppProperties` e `NotFoundException`.
-- Testes do solver, do token, do link e de mapeamento JPA (19 testes).
+- `EventService` (criar, consultar por token, organizador, apagar), `EventController`, `AdminController` e `InviteService`.
+- Fundação web: CSRF de sessão, `SecurityHeadersFilter`, `GlobalExceptionHandler`, `GlobalBindingAdvice`, `WebConfig`, layout/fragmentos, CSS e JS.
+- Templates `index`, `admin/dashboard`, erros 403/404.
+- Testes do solver, token, link, mapeamento JPA, `EventService` e fluxo web com MockMvc (30 testes).
 
-Ainda não existe: serviços, camada web, segurança, templates e Docker.
+Ainda não existe: adicionar/remover participantes, convite/`join`, grupos de exclusão, sorteio integrado, página completa do participante, deploy e Docker.
 
 **Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. O Compose ainda não foi executado porque o Docker não está instalado nesta máquina.
 
 **Bloco 1 (domínio) concluído:** entidades e repositórios mapeados; `ddl-auto=validate` passou contra a V1; `LinkBuilder` e `TokenGenerator` testados. O `EventRepository.deleteByIdBulk` foi necessário para apagar o evento sem o Hibernate reclamar de referência transitória; a cascata real fica no banco (`ON DELETE CASCADE`).
+
+**Bloco 2 (fundação web + evento) concluído:** CSRF de sessão, headers de privacidade, 404/403, criação de evento, painel com links/participantes, apagar evento e teste HTTP de ponta a ponta. 30 testes verdes. Adicionar/remover participantes e `/join` ficam no Bloco 3.
 
 ---
 
@@ -215,7 +220,8 @@ Depende de `LinkBuilder`.
 - `void setRegistration(Event event, boolean open)` — estado desejado explícito (não toggle); `@Transactional` + lock.
 - `void regenerateInviteCode(Event event)` — `@Transactional` + lock; o código antigo deixa de funcionar.
 - `void reopen(Event event)` — `DRAWN → OPEN`; apaga os `Assignment`, reabre inscrições, zera `firstViewedAt`, mantém `drawCount`.
-- `void delete(Event event)` — apaga o evento com `deleteByIdBulk`; a cascata remove participantes, grupos e `Assignment` no banco. `@Transactional` + lock.
+- `Participant organizerOf(Event event)` — busca o participante com `organizer=true`.
+- `void deleteByAdminToken(String adminToken)` — lock pelo token, `deleteByIdBulk` e cascata do banco. `@Transactional`.
 
 ### `ParticipantService`
 
@@ -496,8 +502,8 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 
 1. [x] **Base:** POM final, Docker Compose com Postgres, Flyway V1, perfis, `ddl-auto=validate`.
 2. [x] **Domínio e persistência:** entidades, repositórios, `TokenGenerator`, `LinkBuilder`.
-3. [ ] **Eventos e participantes:** criação de evento, painel básico, adicionar/remover, links individuais e apagar evento com confirmação.
-4. [ ] **Link de convite:** `/join/{inviteCode}`, abrir/fechar inscrições, regenerar, teto.
+3. [x] **Evento, painel e links:** criação de evento, painel básico, links individuais e apagar evento com confirmação.
+4. [ ] **Participantes e convite:** adicionar/remover, `/join/{inviteCode}`, abrir/fechar inscrições, regenerar o código e teto de participantes.
 5. [ ] **Grupos de exclusão:** modelo, serviço e tela com checkboxes.
 6. [ ] **Sorteio:** `DrawService` + `DrawCompletedEvent` (solver já pronto), integração no painel, refazer e reabrir.
 7. [ ] **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
@@ -524,8 +530,8 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 
 ## 13. Critérios de conclusão do MVP
 
-- [ ] Criar evento e receber os três links (painel, participante organizador, convite).
-- [ ] Apagar evento com confirmação, removendo todos os dados em cascata.
+- [x] Criar evento e receber os três links (painel, participante organizador, convite).
+- [x] Apagar evento com confirmação, removendo todos os dados em cascata.
 - [ ] Inscrever participantes pelo convite e manualmente, respeitando o teto de 100.
 - [ ] Abrir/fechar inscrições e regenerar o código de convite.
 - [ ] Criar e remover grupos de exclusão com validação.
