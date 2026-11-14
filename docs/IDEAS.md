@@ -4,7 +4,7 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 
 ## Segurança e operação
 
-- **Rate limiting** por IP/sessão em `/events` e `/join/{inviteCode}`. Hoje o teto de 100 e o lock protegem a integridade, mas não impedem alguém com o convite de preencher as vagas.
+- **Rate limiting** por IP em `/events`, `/join/{inviteCode}` e nas ações de sorteio. Hoje o teto de 100 e o lock protegem a integridade, mas não impedem spam de eventos nem alguém com o convite preencher as vagas. Plano pronto para executar **depois do deploy**: [`RATE-LIMITING.md`](RATE-LIMITING.md).
 - **Hash dos tokens** no banco e links de uso único/expiração. O MVP guarda os tokens em claro porque o painel precisa copiá-los; mitigar exige mudar a UX de compartilhamento.
 - **Regenerar o token individual** de um participante (revogar um link que vazou). Hoje só o `inviteCode` é regenerável.
 - **Log de auditoria** para apagar evento, refazer/reabrir sorteio e regenerar convite, sem registrar tokens.
