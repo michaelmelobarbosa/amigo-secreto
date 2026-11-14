@@ -20,6 +20,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     long countByEvent_Id(UUID eventId);
 
+    List<Participant> findByEvent_Id(UUID eventId);
+
     @Query("""
             select new br.com.michael.amigosecreto.participant.dto.ParticipantRow(
                 p.id, p.name, p.accessToken, p.organizer, p.firstViewedAt)
@@ -46,4 +48,14 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
             @Param("id") UUID id,
             @Param("eventId") UUID eventId,
             @Param("at") Instant at);
+
+    /**
+     * Zera a primeira visualização de todos os participantes do evento.
+     *
+     * <p>Usado ao refazer o sorteio e ao reabrir: o resultado anterior não vale
+     * mais, então cada pessoa precisa ver o novo como se fosse a primeira vez.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("update Participant p set p.firstViewedAt = null where p.event.id = :eventId")
+    int resetFirstViewedAtByEventId(@Param("eventId") UUID eventId);
 }
