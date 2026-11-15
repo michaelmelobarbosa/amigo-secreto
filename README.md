@@ -2,7 +2,7 @@
 
 Aplicação web para organizar amigo secreto **sem login**, com acesso por links que carregam tokens. Serve para uso real (família e trabalho) e como projeto de portfólio, com deploy em VPS própria.
 
-> **Status:** MVP funcional com e-mail na fase 2. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica e envio do link por Brevo implementados. **147 testes** passando.
+> **Status:** MVP funcional com e-mail na fase 2 e rate limiting em memória. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica, envio do link por Brevo e limite de requisições por IP implementados. **159 testes** passando.
 
 ## Funcionalidades
 
@@ -24,6 +24,7 @@ Aplicação web para organizar amigo secreto **sem login**, com acesso por links
 - Tokens de 128 bits com `SecureRandom`, prefixos distintos (`adm_`, `inv_`, `p_`) e índices únicos.
 - Token inválido retorna **404**, sem confirmar existência.
 - CSRF próprio por token de sessão em todos os POSTs (não há Spring Security).
+- Rate limiting em memória por IP em `POST /events`, `/join`, `draw`/`redraw` e wishlist, com `429` + `Retry-After` ([plano e limites](docs/RATE-LIMITING.md)).
 - Cookie de sessão `HttpOnly` + `SameSite=Lax`; `Secure` por padrão (o perfil `dev` desativa para HTTP local).
 - Rotas sensíveis com `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Content-Type-Options`, `X-Frame-Options`, CSP e `X-Robots-Tag`.
 - `robots.txt` bloqueia indexação.
@@ -154,7 +155,7 @@ Ideias e riscos aceitos estão em [docs/IDEAS.md](docs/IDEAS.md).
 
 ## Testes
 
-A suíte cobre o solver (incluindo o caso de 16 participantes em dois grupos de 8), entidades/repositórios, serviços transacionais, CSRF, headers, 404, IDOR, XSS, fluxo de convite, sorteio/refazer/reabrir, página do participante, adaptador Brevo, outbox, retry/reenvio, e-mail no fluxo web e download/envio dos links do organizador.
+A suíte cobre o solver (incluindo o caso de 16 participantes em dois grupos de 8), entidades/repositórios, serviços transacionais, CSRF, headers, 404, IDOR, XSS, fluxo de convite, sorteio/refazer/reabrir, página do participante, adaptador Brevo, outbox, retry/reenvio, e-mail no fluxo web, download/envio dos links do organizador e rate limiting (janela, IP/categoria, IPv6 e resposta 429).
 
 ```bash
 ./mvnw test
