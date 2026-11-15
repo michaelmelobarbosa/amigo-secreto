@@ -237,7 +237,7 @@ Use POST para remoções (formulários HTML não têm DELETE) e proteja contra C
 - Rotas `/p/**`, `/join/**` e `/admin/**` com `Cache-Control: no-store` e `Referrer-Policy: no-referrer`, para o token não vazar para terceiros. Os headers de segurança também cobrem `/` e `/events` (o redirect de criação carrega o token do painel).
 - `robots.txt` bloqueia indexação; CSP restritiva (`script-src 'self'`, `frame-ancestors 'none'`); `X-Content-Type-Options`, `X-Frame-Options` e `X-Robots-Tag` nas rotas sensíveis.
 - Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` por padrão. O perfil `dev` desativa `Secure` para rodar em HTTP local; produção exige HTTPS.
-- O convite é público: limite de tamanho nos campos, teto de participantes por evento e rate limiting por IP. O rate limiting está planejado para **depois do deploy**; ver [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
+- O convite é público: limite de tamanho nos campos, teto de participantes por evento e rate limiting por IP em `POST /events` (5/10 min), `POST /join/{inviteCode}` (30/10 min), `draw`/`redraw` (10/h) e wishlist (30/10 min), em memória, com `429` + `Retry-After`. Ver [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - Validação de entrada com Bean Validation e escape automático do Thymeleaf contra XSS. Proteção CSRF com token de sessão próprio em todos os POSTs.
 - Apagar evento exige CSRF e confirmação explícita; a operação é irreversível.
 - Segredos (senha do banco) em variáveis de ambiente, fora do repositório.
@@ -348,7 +348,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 - E-mail transacional (fase 2): link individual após o sorteio/refazer, e-mail opcional, Brevo, domínio/SPF/DKIM/DMARC, retentativas e status de entrega. Detalhes na seção 15.
 - Telefone/WhatsApp Cloud API/SMS/Telegram como canal automatizado. O MVP mantém o `wa.me` manual; WhatsApp API é paga para mensagens utility iniciadas pelo negócio e SMS é pago.
 - Recuperação de link por e-mail e double opt-in (avaliar depois da fase 2).
-- Rate limiting por IP em `/events`, `/join` e sorteio, depois do deploy. Plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
+- Rate limiting por IP em `/events`, `/join` e sorteio, **implementado em 2026-11-15** (filtro em memória; validação atrás do Caddy fica para o deploy). Limite diário, Redis e WAF continuam fora. Plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - Permutação com reciprocidade permitida, como opção do evento.
 - Expiração automática de eventos antigos (limpeza de dados).
 - Domínio próprio e HTTPS (pré-requisito da fase 2 de e-mail e de uso real na internet).
@@ -387,6 +387,7 @@ Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados 
 - 2026-11-14: fase 2 implementada com Brevo, outbox `notification`, worker com retry/idempotência, e-mail opcional no join e na adição manual, status/reenvio no painel e envio real validado. Dedupe por e-mail continua fora desta versão.
 - 2026-11-14: rate limiting por IP decidido para **depois do deploy**, com filtro em memória, janela fixa, sem dependência nova e limites generosos; plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - 2026-11-14: mitigação da perda do link do painel: cartão de links com cópia, download em TXT e envio por e-mail sob demanda, mais aviso ao sair sem guardar. Não é login nem recuperação automática; a conta de organizador continua como fase futura.
+- 2026-11-15: rate limiting em memória implementado: `OncePerRequestFilter` por IP/categoria, janela fixa, mapa LRU, `429` + `Retry-After` e janela própria de 1 hora para sorteio. Falta validar o IP real atrás do Caddy no deploy.
 
 ## 15. Fase 2 — e-mail (implementado)
 
