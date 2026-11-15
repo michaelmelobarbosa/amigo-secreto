@@ -312,6 +312,17 @@ Templates Thymeleaf em `templates/email/result.html` e `result.txt`:
 - Dedupe: normalizar e comparar; mensagem neutra em caso de duplicado. Não bloqueie sem verificação.
 - Apagar evento remove `notification` em cascata.
 
+### 5.8 Links do organizador (envio avulso)
+
+- O painel tem um cartão "Seus links" com o link do painel, o link do organizador como participante e o convite.
+- Ações: copiar, baixar um `.txt` e enviar os três por e-mail para um endereço digitado na hora.
+- O envio é **direto** pelo `OrganizerLinksMailer`, não passa pelo outbox de sorteio: é uma ação explícita do organizador, com resposta imediata.
+- O endereço digitado **não é persistido** e não vira login nem recuperação automática.
+- Com `app.email.enabled=false`, o cartão informa que o envio está desativado e aponta o TXT.
+- Em sandbox, o Brevo aceita mas não entrega; a tela avisa em vez de fingir sucesso.
+- O TXT e o e-mail carregam aviso para não compartilhar o link do painel.
+- Testes: `OrganizerLinksMailerTest`, `OrganizerLinksWebIntegrationTest` e `OrganizerLinksEmailWebIntegrationTest`.
+
 ## 6. Webhooks (opcional, fase 2.1)
 
 Brevo **não assina** webhooks. Para usar:

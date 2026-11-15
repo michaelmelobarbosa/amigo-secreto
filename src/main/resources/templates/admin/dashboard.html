@@ -11,12 +11,18 @@
     <div class="alert alert-success" role="status" th:if="${message}" th:text="${message}"></div>
     <div class="alert alert-error" role="alert" th:if="${error}" th:text="${error}"></div>
 
-    <section class="card" th:if="${created}">
+    <section class="card" id="organizer-access"
+             th:attr="data-links-guard=${created} ? 'true' : null">
         <h2>Seus links</h2>
+        <p class="alert alert-warning" role="alert">
+            <strong>Guarde o link do painel.</strong> Sem ele, você não consegue voltar a gerenciar
+            este evento. Copie, baixe o TXT ou envie para o seu e-mail agora.
+        </p>
         <div class="link-row">
             <span class="link-label">Painel</span>
             <code th:text="${links.adminUrl}">/admin/...</code>
-            <button class="button secondary" type="button" th:attr="data-copy=${links.adminUrl}">Copiar</button>
+            <button class="button secondary" type="button" th:attr="data-copy=${links.adminUrl}"
+                    data-links-saved>Copiar</button>
         </div>
         <div class="link-row">
             <span class="link-label">Você como participante</span>
@@ -29,6 +35,30 @@
             <code th:text="${links.inviteUrl}">/join/...</code>
             <button class="button secondary" type="button" th:attr="data-copy=${links.inviteUrl}">Copiar</button>
             <a class="button secondary" th:href="${links.inviteWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        </div>
+
+        <div class="row-actions">
+            <a class="button secondary" th:href="@{/admin/{token}/links.txt(token=${adminToken})}"
+               download="amigo-secreto-links.txt" data-links-saved>Baixar links (.txt)</a>
+            <button class="button secondary" type="button" th:if="${created}"
+                    data-links-saved data-links-ack>Já salvei os links</button>
+        </div>
+
+        <div class="subsection">
+            <h3>Enviar por e-mail</h3>
+            <p class="muted">O endereço é usado só neste envio e não fica salvo no evento.</p>
+            <form th:action="@{/admin/{token}/links/email(token=${adminToken})}"
+                  th:object="${sendLinksForm}" method="post">
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <div class="field">
+                    <label for="links-email">E-mail para receber os links</label>
+                    <input id="links-email" type="email" th:field="*{email}" maxlength="254"
+                           autocomplete="email" placeholder="voce@exemplo.com">
+                    <p class="field-error" th:if="${#fields.hasErrors('email')}"
+                       th:errors="*{email}">Erro no e-mail</p>
+                </div>
+                <button class="button" type="submit">Enviar links</button>
+            </form>
         </div>
     </section>
 
