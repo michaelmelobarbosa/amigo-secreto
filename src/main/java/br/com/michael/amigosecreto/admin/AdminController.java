@@ -4,6 +4,7 @@ import br.com.michael.amigosecreto.admin.dto.AdminDashboardView;
 import br.com.michael.amigosecreto.admin.dto.AddParticipantForm;
 import br.com.michael.amigosecreto.admin.dto.ExclusionGroupForm;
 import br.com.michael.amigosecreto.admin.dto.ParticipantRowView;
+import br.com.michael.amigosecreto.admin.dto.SendLinksForm;
 import br.com.michael.amigosecreto.common.LinkBuilder;
 import br.com.michael.amigosecreto.common.RuleViolationException;
 import br.com.michael.amigosecreto.draw.DrawImpossibleException;
@@ -20,6 +21,7 @@ import br.com.michael.amigosecreto.notification.NotificationStatus;
 import br.com.michael.amigosecreto.participant.Participant;
 import br.com.michael.amigosecreto.participant.ParticipantService;
 import br.com.michael.amigosecreto.participant.dto.ParticipantRow;
+import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
@@ -30,6 +32,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import jakarta.validation.Valid;
 import org.springframework.beans.propertyeditors.StringTrimmerEditor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -56,6 +61,7 @@ public class AdminController {
     private final ExclusionGroupService exclusionGroupService;
     private final DrawService drawService;
     private final NotificationService notificationService;
+    private final OrganizerLinksMailer organizerLinksMailer;
 
     public AdminController(
             EventService eventService,
@@ -64,7 +70,8 @@ public class AdminController {
             LinkBuilder linkBuilder,
             ExclusionGroupService exclusionGroupService,
             DrawService drawService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            OrganizerLinksMailer organizerLinksMailer) {
         this.eventService = eventService;
         this.participantService = participantService;
         this.inviteService = inviteService;
@@ -72,10 +79,11 @@ public class AdminController {
         this.exclusionGroupService = exclusionGroupService;
         this.drawService = drawService;
         this.notificationService = notificationService;
+        this.organizerLinksMailer = organizerLinksMailer;
     }
 
     /** O e-mail chega com espaços do formulário; valida já sem eles. */
-    @InitBinder("addParticipantForm")
+    @InitBinder({"addParticipantForm", "sendLinksForm"})
     public void trimEmail(WebDataBinder binder) {
         binder.registerCustomEditor(String.class, "email", new StringTrimmerEditor(true));
     }
@@ -83,6 +91,59 @@ public class AdminController {
     @GetMapping("/admin/{adminToken}")
     public String dashboard(@PathVariable String adminToken, Model model) {
         return renderDashboard(adminToken, model);
+    }
+
+    /** Download dos três links do organizador; o token já é a credencial. */
+    @GetMapping("/admin/{adminToken}/links.txt")
+    public ResponseEntity<String> downloadLinks(@PathVariable String adminToken) {
+        Event event = eventService.byAdminToken(adminToken);
+        Participant organizer = eventService.organizerOf(event);
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"amigo-secreto-links.txt\"")
+                .contentType(new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8))
+                .body(inviteService.organizerLinksText(event, organizer));
+    }
+
+    /**
+     * Envio avulso dos links para o e-mail digitado. Não persiste o endereço:
+     * é um botão de conveniência, não recuperação de conta.
+     */
+    @PostMapping("/admin/{adminToken}/links/email")
+    public String sendLinksByEmail(
+            @PathVariable String adminToken,
+            @Valid @ModelAttribute("sendLinksForm") SendLinksForm form,
+            BindingResult bindingResult,
+            Model model,
+            RedirectAttributes redirectAttributes) {
+        if (bindingResult.hasErrors()) {
+            model.addAttribute("sendLinksForm", form);
+            return renderDashboard(adminToken, model);
+        }
+
+        Event event = eventService.byAdminToken(adminToken);
+        Participant organizer = eventService.organizerOf(event);
+        OrganizerLinksMailer.Result result =
+                organizerLinksMailer.send(event, organizer, form.email());
+
+        if (result.disabled()) {
+            redirectAttributes.addFlashAttribute(
+                    "error",
+                    "O envio de e-mail está desativado neste ambiente. Baixe o TXT dos links.");
+        } else if (result.accepted() && result.sandbox()) {
+            redirectAttributes.addFlashAttribute(
+                    "message",
+                    "Links aceitos em modo sandbox; nenhum e-mail será entregue.");
+        } else if (result.accepted()) {
+            redirectAttributes.addFlashAttribute(
+                    "message", "Links enviados para o e-mail informado.");
+        } else {
+            redirectAttributes.addFlashAttribute(
+                    "error",
+                    "Não foi possível enviar os links. Baixe o TXT e tente novamente.");
+        }
+        return redirectToDashboard(adminToken, redirectAttributes);
     }
 
     @PostMapping("/admin/{adminToken}/participants")
@@ -310,6 +371,9 @@ public class AdminController {
         model.addAttribute("adminToken", adminToken);
         if (!model.containsAttribute("addParticipantForm")) {
             model.addAttribute("addParticipantForm", new AddParticipantForm("", "", ""));
+        }
+        if (!model.containsAttribute("sendLinksForm")) {
+            model.addAttribute("sendLinksForm", new SendLinksForm(""));
         }
         if (!model.containsAttribute("exclusionGroupForm")) {
             model.addAttribute("exclusionGroupForm", new ExclusionGroupForm("", List.of()));

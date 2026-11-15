@@ -170,6 +170,8 @@ Assignment
 
 A tela de sucesso mostra três links: o painel (`/admin/{adminToken}`), a página do organizador como participante e o link de convite (`/join/{inviteCode}`), com botões de copiar e de compartilhar no WhatsApp.
 
+O organizador pode **baixar os três links em um TXT** ou **enviá-los para um e-mail informado na hora**. O endereço usado nesse envio não é persistido, não vira login e não funciona como recuperação automática. Enquanto não copiar, baixar ou enviar, a tela avisa que sair sem guardar o link do painel significa perder o acesso ao evento.
+
 ### 6.2 Painel do organizador (`/admin/{adminToken}`)
 
 - Dados do evento.
@@ -180,6 +182,7 @@ A tela de sucesso mostra três links: o painel (`/admin/{adminToken}`), a págin
 - Botão "Sortear", que só habilita com 3 participantes sem restrições ou 4 com pelo menos um grupo de exclusão. Mostra erro claro se o sorteio for inviável.
 - Depois do sorteio: o painel mostra apenas o status de visualização e os botões "Refazer sorteio" e "Reabrir e editar". **Nunca exibe quem tirou quem.**
 - Link de acesso do próprio organizador como participante em destaque.
+- Cartão "Seus links" com cópia, download em TXT e envio por e-mail sob demanda; o e-mail não é armazenado e não substitui o token do painel.
 - Nomes duplicados são permitidos; o painel sinaliza quando há repetição.
 - A wishlist não é exibida no painel do organizador.
 - Zona de perigo: "Apagar evento" com confirmação explícita. Remove participantes, grupos e `Assignment` em cascata; ação irreversível.
@@ -240,6 +243,7 @@ Use POST para remoções (formulários HTML não têm DELETE) e proteja contra C
 - Segredos (senha do banco) em variáveis de ambiente, fora do repositório.
 - Como os tokens viajam na URL, não exponha o app em HTTP puro na internet com dados reais. Enquanto não houver domínio e HTTPS, use em rede local ou com um túnel.
 - Disciplina do organizador: o banco guarda os `Assignment` em claro. Quem tem acesso direto ao banco pode ver o resultado. Para uso em família e trabalho isso é aceitável, e vale registrar no README.
+- O link do painel é a credencial do organizador. O download e o e-mail dos links carregam aviso explícito para não compartilhar; o endereço digitado para o envio avulso não é persistido.
 - E-mail, quando entrar na fase 2, é apenas canal de entrega: não vira login, não substitui o token e não é exibido em página pública. Endereços são dados pessoais e são apagados junto com o evento.
 
 ## 8. Arquitetura e estrutura do projeto
@@ -382,6 +386,7 @@ Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados 
 - 2026-11-13: decisões de MVP confirmadas: organizador participa; apagar evento com confirmação; sem edição de nome de participante; CSRF por token de sessão; H2 nos testes; nomes duplicados permitidos com aviso; wishlist fora do painel; fuso convertido na borda.
 - 2026-11-14: fase 2 implementada com Brevo, outbox `notification`, worker com retry/idempotência, e-mail opcional no join e na adição manual, status/reenvio no painel e envio real validado. Dedupe por e-mail continua fora desta versão.
 - 2026-11-14: rate limiting por IP decidido para **depois do deploy**, com filtro em memória, janela fixa, sem dependência nova e limites generosos; plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
+- 2026-11-14: mitigação da perda do link do painel: cartão de links com cópia, download em TXT e envio por e-mail sob demanda, mais aviso ao sair sem guardar. Não é login nem recuperação automática; a conta de organizador continua como fase futura.
 
 ## 15. Fase 2 — e-mail (implementado)
 
@@ -405,6 +410,7 @@ A fase 2 está implementada: o e-mail é um canal **opcional** de entrega do lin
 - Envio assíncrono: o `DrawService` publica `DrawCompletedEvent` só depois do commit; o listener grava o outbox numa transação nova (`TransactionTemplate` com `REQUIRES_NEW`) e um worker agendado processa os pendentes. Retentativas não desfazem o sorteio.
 - Conteúdo HTML + texto montado por `EmailContentBuilder`, com link absoluto via `LinkBuilder` e HTML escapado; sem pixel de rastreamento.
 - Painel mostra status de entrega e botão "reenviar"; o reenvio gera nova chave de idempotência.
+- O painel também envia, sob demanda, os três links do organizador para um e-mail digitado na hora. É envio direto (não passa pelo outbox de sorteio), não persiste o endereço e não é recuperação de conta.
 - Dedupe por e-mail (melhor esforço, sem bloquear) **não foi implementado nesta versão**: dois participantes com o mesmo e-mail recebem dois avisos. Caixa compartilhada e dois e-mails para a mesma pessoa são limitações conhecidas.
 - Sem verificação (double opt-in) na primeira versão. Se a recuperação de link por e-mail virar requisito, adicionar confirmação depois.
 - Privacidade/LGPD: coletar apenas o necessário, informar a finalidade, não expor e-mail em página pública, apagar junto com o evento (cascade) e com a remoção do participante, não logar e-mail nem token.
