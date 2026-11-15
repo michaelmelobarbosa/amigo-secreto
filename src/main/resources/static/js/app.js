@@ -34,6 +34,38 @@ document.addEventListener('click', async (event) => {
     }
 });
 
+const linksGuard = document.querySelector('[data-links-guard="true"]');
+if (linksGuard) {
+    let acknowledged = false;
+
+    const acknowledge = (event) => {
+        acknowledged = true;
+        const target = event.currentTarget;
+        if (target instanceof HTMLElement && target.hasAttribute('data-links-ack')) {
+            target.textContent = 'Aviso desativado';
+            target.setAttribute('disabled', 'disabled');
+        }
+    };
+
+    linksGuard.querySelectorAll('[data-links-saved]').forEach((element) => {
+        element.addEventListener('click', acknowledge);
+    });
+
+    linksGuard.querySelectorAll('form').forEach((form) => {
+        form.addEventListener('submit', () => {
+            acknowledged = true;
+        });
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (acknowledged) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = '';
+    });
+}
+
 document.addEventListener('submit', (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) {

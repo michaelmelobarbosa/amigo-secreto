@@ -27,9 +27,10 @@ Já implementado:
 - Templates `index`, `admin/dashboard`, `join/form`, `join/closed`, `participant/view`, erros 403/404/500.
 - Segurança: cookie `Secure` por padrão (perfil `dev` desativa), headers em todas as rotas dinâmicas, CSP sem inline, `robots.txt`, CSP/`data-confirm`, preview bots não marcam `firstViewedAt`.
 - E-mail (fase 2): `Participant.email`, tabela `notification`, `EmailSender`/`BrevoEmailSender`, `EmailContentBuilder`, listener de `DrawCompletedEvent` (nova transação pós-commit), worker com retry/idempotência e status/reenvio no painel.
+- Acesso do organizador: cartão de links com cópia, download em TXT e envio por e-mail sob demanda (`OrganizerLinksMailer`), sem persistir o endereço e sem virar login.
 - Deploy: `Dockerfile` multi-stage, `docker-compose.prod.yml` (app + Postgres + Caddy), `Caddyfile`, scripts de backup/restore, `docs/DEPLOY.md` (operação + decisões) e `docs/INFRA-VPS.md` (Caddy de borda e múltiplas apps).
 - Portfólio: `README.md`, `docs/IDEAS.md` e CI em `.github/workflows/ci.yml`.
-- Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox e e-mail (139 testes).
+- Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox e e-mail (147 testes).
 
 Ainda não existe: execução real na VPS.
 
@@ -47,7 +48,9 @@ Ainda não existe: execução real na VPS.
 
 **Bloco 6 (deploy + portfólio) concluído em arquivos:** Dockerfile multi-stage, Compose de produção, Caddy/HTTPS, backup/restore, `docs/DEPLOY.md`, `docs/INFRA-VPS.md`, README, `docs/IDEAS.md` e CI. O ambiente da VPS foi levantado pelo agente Hermes (ARM64, 2 vCPU, 11 GB de RAM, 29 GB livres, Docker não instalado, portas 8080/9119/9120 ocupadas pelo próprio Hermes) e está registrado em `docs/DEPLOY.md`. A execução real continua pendente, e o documento lista as pendências de código P1–P7 a aplicar antes do primeiro deploy (bind do Postgres de dev, limites de memória/log, build ARM64 fora da VPS, imagem de registry).
 
-**Bloco 7 (e-mail / Brevo) concluído:** conta e domínio `mail.barbosalabs.dev` autenticados, sender e API key validados, envio real testado; migrações V2/V3, outbox `notification`, `BrevoEmailSender`, listener pós-commit, worker com retry/idempotência, templates HTML/texto, e-mail opcional no join/adição manual e status/reenvio no painel. 139 testes verdes.
+**Bloco 7 (e-mail / Brevo) concluído:** conta e domínio `mail.barbosalabs.dev` autenticados, sender e API key validados, envio real testado; migrações V2/V3, outbox `notification`, `BrevoEmailSender`, listener pós-commit, worker com retry/idempotência, templates HTML/texto, e-mail opcional no join/adição manual e status/reenvio no painel. 139 testes verdes na entrega.
+
+**Bloco 8 (acesso do organizador) concluído:** cartão de links sempre visível no painel, download em TXT, envio dos três links por e-mail sob demanda, aviso de risco e confirmação ao sair da tela de criação sem copiar/baixar/enviar. O endereço digitado não é persistido. 147 testes verdes.
 
 ---
 
@@ -566,7 +569,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [x] Painel nunca expõe quem tirou quem.
 - [x] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
 - [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate` (H2 validado; Postgres pendente no deploy).
-- [x] Testes unitários, de serviço e de integração passando (139 testes).
+- [x] Testes unitários, de serviço e de integração passando (147 testes).
 - [ ] Deploy Docker/Compose funcional na VPS (arquivos prontos; falta executar build, certificado e restore).
 
 ---
