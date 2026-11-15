@@ -102,8 +102,12 @@ configuração deve seguir a escolha; se quiser mudar, registre o motivo aqui.
 Por que não 1: o schema é **PostgreSQL** e o Flyway aplica migrações específicas do dialeto
 (`ON DELETE CASCADE`, locks `PESSIMISTIC_WRITE`, `ddl-auto=validate`). Trocar por H2 embarcado exigiria
 outro conjunto de migrações e mudaria o comportamento que a spec trata como crítico. Além disso,
-[`scripts/backup-postgres.sh`](.bash scripts/backup-postgres.sh) e
-[`scripts/restore-postgres.sh`](.bash scripts/restore-postgres.sh) dependem de `docker compose exec db`.
+[`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh) e
+[`scripts/restore-postgres.sh`](../scripts/restore-postgres.sh) dependem de `docker compose exec db`.
+
+Quando a VPS passar a hospedar mais de uma aplicação, a mesma lógica vale **entre projetos**: um
+Postgres por app, não um banco compartilhado. Custo e justificativa estão em
+[`INFRA-VPS.md#banco-de-dados-um-postgres-por-projeto`](./INFRA-VPS.md#banco-de-dados-um-postgres-por-projeto).
 
 Por que o Caddy saiu daqui: ele passa a ser um **stack de borda** compartilhado, com um bloco por
 hostname. O `docker-compose.prod.yml` deste projeto só conhece `app` e `db`; a app entra na rede

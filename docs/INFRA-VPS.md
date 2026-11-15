@@ -65,6 +65,47 @@ docker network create edge
   O banco **nunca** entra na `edge`.
 - Cada app participa de **duas** redes: a privada (para o banco) e a `edge` (para o Caddy).
 
+### Banco de dados: um Postgres por projeto
+
+Cada projeto tem o **seu próprio container `db`** e o **seu próprio volume** (`amigo-secreto_pgdata`,
+`outra_pgdata`). O banco nunca é compartilhado entre aplicações.
+
+| Opção | RAM | Isolamento |
+| --- | --- | --- |
+| **Um Postgres por projeto (escolhido)** | ~60–120 MB por banco | total |
+| Um Postgres compartilhado, um *database* por app | ~60–120 MB no total | parcial |
+| Um Postgres compartilhado, um *schema* por app | ~60–120 MB no total | fraco |
+
+Custar ~100 MB a mais e ainda assim escolher o dedicado se justifica por:
+
+- **Backup e restore independentes.** Um `pg_restore --clean` do projeto A não pode tocar no B. Os
+  scripts atuais já operam por projeto (`docker compose -f ... exec db`).
+- **Versão do Postgres independente.** Um app pode exigir 17, outro 18; upgrade vira decisão local,
+  sem arrastar todos os projetos no mesmo fim de semana.
+- **Credenciais e papéis isolados.** Senha e usuário de um projeto não abrem nada no outro.
+- **Blast radius.** Um `DROP`, uma migração errada, um OOM ou um disco cheio afetam um projeto só.
+- **Locks e pool não competem.** O `PESSIMISTIC_WRITE` do sorteio não disputa conexões com o
+  tráfego de outra aplicação.
+- **Flyway tem história própria** por banco, sem risco de colisão de `flyway_schema_history`.
+- **Mover é trivial.** `docker compose` + volume acompanham o projeto para outra VPS sem exportar
+  schema de um cluster alheio.
+
+O custo real é 60–120 MB de RAM e ~60–120 MB de disco por instância (`initdb` + WAL). Contra 11 GB
+e 29 GB livres, ~100 MB de diferença é ruído.
+
+**Quando compartilhar faria sentido:** 5+ aplicações minúsculas, uma VPS de 2 GB, ou um Postgres
+gerenciado que já oferece *database* por app. Nesse caso, use **database** (não schema) por
+aplicação, roles separadas e backup filtrado por database — e aceite o acoplamento de versão,
+restore e credenciais.
+
+Cuidados no modelo dedicado:
+
+- não fixe `container_name: db` em dois projetos (colisão de nome); use o nome do serviço e deixe o
+  Compose prefixar com o nome do projeto;
+- backup e restore sempre por projeto, como em [`DEPLOY.md`](./DEPLOY.md#backup);
+- `pg_dump` é do banco inteiro: com instância dedicada, isso é exatamente o que se quer;
+- limite o banco também (`mem_limit: 512m` é seguro para este porte).
+
 ### Stack de borda
 
 ```yaml
@@ -360,4 +401,5 @@ processo. Pare o antigo antes de subir o novo, ou aceite alguns segundos de 502.
 | 2026-11-14 | Limite de memória explícito na JVM | `MaxRAMPercentage=75` sem limite usa os 11 GB do host |
 | 2026-11-14 | Access log desligado no site do Amigo Secreto | tokens no path das URLs |
 | 2026-11-14 | Caddy desacoplável para stack de borda (opção A) quando houver segunda app | evita acoplar ciclos de deploy; roteia por SNI na 443 |
+| 2026-11-14 | Um Postgres por projeto, não um cluster compartilhado | isolamento de backup/restore, versão, credenciais e locks; custo de ~100 MB é irrelevante neste porte |
 | 2026-11-15 | Caddy desacoplado de fato: `edge` fora deste repositório | a app publica só `expose: 8080`; o ingress é compartilhado e roteia várias apps |
