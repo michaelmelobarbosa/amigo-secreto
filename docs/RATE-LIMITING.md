@@ -117,8 +117,8 @@ app:
 
 O rate limit só funciona se o IP for confiável.
 
-- A porta do app **não é publicada** no host; só o Caddy alcança `app:8080`. Isso já é a regra do
-  deploy e deve continuar.
+- A porta do app **não é publicada** no host; só o Caddy do stack de borda alcança
+  `amigo-app:8080` pela rede `edge`. Isso já é a regra do deploy e deve continuar.
 - O Caddy precisa **sobrescrever** `X-Forwarded-For` com o IP real do cliente, não confiar no header
   que o cliente mandou. Em Caddy moderno, sem `trusted_proxies` ele não confia em headers de
   upstream; ainda assim, validar com um teste.

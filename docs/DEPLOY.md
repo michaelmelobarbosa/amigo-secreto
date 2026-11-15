@@ -1,15 +1,17 @@
 # Deploy — Amigo Secreto
 
-Guia de operação em VPS Linux: Docker Compose (`app` + PostgreSQL) atrás do **Caddy** com TLS
-automático. O Postgres e a aplicação **não** publicam portas no host; só o Caddy fica exposto.
+Guia de operação em VPS Linux: Docker Compose (`app` + PostgreSQL) publicado por um **Caddy de
+borda externo** com TLS automático. O Postgres e a aplicação **não** publicam portas no host; só o
+Caddy, em um stack separado, fica exposto.
 
 > **Origem das informações sobre a VPS.** O levantamento de hardware, sistema, portas e firewall foi
 > feito pelo **Hermes**, agente instalado na própria VPS, em 2026-11-14, e cruzado com o repositório.
 > Onde o dado não pôde ser confirmado por comando, está marcado com **⚠️ confirmar**.
 
-> **Documento complementar.** A decisão de desacoplar o Caddy deste projeto, a topologia para uma
-> segunda aplicação na mesma VPS e a política de logs por aplicação estão em
-> [`INFRA-VPS.md`](./INFRA-VPS.md). Este arquivo cobre o deploy desta aplicação.
+> **Documento complementar.** O Caddy foi desacoplado deste projeto: ele vive em um stack `edge`
+> compartilhado, que roteia esta e outras aplicações. A topologia, os arquivos do stack de borda e a
+> política de logs estão em [`INFRA-VPS.md`](./INFRA-VPS.md). Este arquivo cobre apenas o deploy
+> desta aplicação; o stack de borda é configurado **fora** do repositório.
 
 ## Sumário
 
@@ -26,24 +28,27 @@ automático. O Postgres e a aplicação **não** publicam portas no host; só o 
 - [Restore](#restore)
 - [Notas de segurança](#notas-de-segurança)
 - [Problemas comuns](#problemas-comuns)
-- [Pendências no código antes de executar](#pendências-no-código-antes-de-executar)
+- [Pendências de deploy aplicadas](#pendências-de-deploy-aplicadas-2026-11-15)
 - [Checklist para quem for configurar a VPS](#checklist-para-quem-for-configurar-a-vps)
+- [O que configurar fora do projeto](#o-que-configurar-fora-do-projeto)
 - [O que ainda não foi validado](#o-que-ainda-não-foi-validado)
 
 ## Resumo executivo
 
-- **Três containers** em produção: `db` (Postgres 17), `app` (Spring Boot) e `caddy` (borda). Não é
-  um container único; o porquê está em [Decisões](#decisões-de-arquitetura-com-justificativa).
-- **Só o Caddy publica portas**: `80/tcp`, `443/tcp` e `443/udp`. `app` usa `expose: 8080` e `db` não
-  tem `ports`.
-- **A VPS é ARM64.** Todas as imagens usadas têm `linux/arm64/v8` (verificado no registry), mas a
-  imagem **não deve ser compilada na VPS**: 2 vCPU e 29 GB livres.
-- **A imagem ideal vem de registry** (CI com `buildx --platform linux/arm64`), e a VPS só faz
-  `pull`. Compilar na VPS é o plano B.
+- **Dois containers neste projeto**: `db` (Postgres 17) e `app` (Spring Boot). O Caddy é um
+  **stack de borda separado**, compartilhado com outras aplicações da VPS; o porquê está em
+  [Decisões](#decisões-de-arquitetura-com-justificativa) e em [`INFRA-VPS.md`](./INFRA-VPS.md).
+- **Nenhum container deste projeto publica portas.** `app` usa `expose: 8080` e `db` não tem
+  `ports`. Só o Caddy do stack `edge` publica `80/tcp`, `443/tcp` e `443/udp`.
+- **A VPS é ARM64.** Todas as imagens usadas têm `linux/arm64/v8` (verificado no registry), e o CI
+  publica a imagem ARM64 no GHCR; a VPS só faz `pull`.
+- **A imagem vem de registry com tag imutável.** O Compose usa `APP_IMAGE:APP_TAG` (o `APP_TAG` é o
+  SHA do commit), então deploy e rollback são determinísticos e não há build na VPS.
 - **O firewall do host não protege container com porta publicada.** Quem manda é a *Security List* da
   Oracle Cloud. Detalhes em [Firewall](#firewall-e-exposição-de-portas).
 - **Sempre use `-f docker-compose.prod.yml`.** O `docker-compose.yml` de desenvolvimento está no
-  mesmo diretório e publica o Postgres; rodá-lo na VPS expõe o banco.
+  mesmo diretório, roda com outro nome de projeto (`amigo-secreto-dev`) e publica o Postgres em
+  loopback; rodá-lo na VPS não é o caminho de produção.
 
 ## Ambiente da VPS
 
@@ -75,9 +80,9 @@ Levantamento do Hermes, cruzado com este repositório.
 1. **Não há conflito de software.** Docker usa cgroups/namespaces e cadeias de iptables próprias; o
    Hermes é um processo systemd. Convivem.
 2. **A porta 8080 do host é do Hermes, mas isso não conflita com a nossa app.** O `8080` da aplicação
-   vive no namespace do container. O Caddy a alcança por `app:8080` na rede do Compose. Conflito só
-   existiria com `-p 8080:8080` ou `network_mode: host` — nenhum dos dois é usado.
-3. **80/443 estão livres**, então o Caddy pode ser o dono delas.
+   vive no namespace do container. O Caddy de borda alcança `amigo-app:8080` pela rede externa
+   `edge`. Conflito só existiria com `-p 8080:8080` ou `network_mode: host` — nenhum dos dois é usado.
+3. **80/443 estão livres**, então o Caddy do stack de borda pode ser o dono delas.
 4. **Disco é o recurso crítico**, não RAM. O uso subiu de 12 GB para 19 GB em poucos dias segundo o
    Hermes: vale investigar o que cresceu antes de somar mais coisa.
 
@@ -86,13 +91,13 @@ Levantamento do Hermes, cruzado com este repositório.
 Cada decisão abaixo lista as opções consideradas e por que a escolhida venceu. Quem for executar a
 configuração deve seguir a escolha; se quiser mudar, registre o motivo aqui.
 
-### D1. Três containers (`db` + `app` + `caddy`), não um
+### D1. Dois containers neste projeto (`db` + `app`) e o Caddy em stack de borda
 
 | Opção | Prós | Contras |
 | --- | --- | --- |
 | **1 container** (app + banco + TLS) | menos peças | anti-padrão: Postgres no mesmo container da JVM, PID 1 duplo, upgrade acoplado, backup frágil |
-| **2 containers** (app + db, TLS no host) | simples | exige proxy/TLS fora do Compose; perde o certificado automático |
-| **3 containers** (escolhido) | isolamento, healthchecks, TLS automático, backup por `docker exec` | uma peça a mais para operar |
+| **2 containers + Caddy de borda** (escolhido) | isolamento do banco, deploy independente, TLS centralizado para N apps | um stack de borda a mais para operar, fora deste repositório |
+| **3 containers** (Caddy neste Compose) | simples para uma app só | acopla o ciclo de deploy do ingress ao da aplicação; não escala para a segunda app |
 
 Por que não 1: o schema é **PostgreSQL** e o Flyway aplica migrações específicas do dialeto
 (`ON DELETE CASCADE`, locks `PESSIMISTIC_WRITE`, `ddl-auto=validate`). Trocar por H2 embarcado exigiria
@@ -104,19 +109,25 @@ Quando a VPS passar a hospedar mais de uma aplicação, a mesma lógica vale **e
 Postgres por app, não um banco compartilhado. Custo e justificativa estão em
 [`INFRA-VPS.md#banco-de-dados-um-postgres-por-projeto`](./INFRA-VPS.md#banco-de-dados-um-postgres-por-projeto).
 
-### D2. Só o Caddy publica portas
+Por que o Caddy saiu daqui: ele passa a ser um **stack de borda** compartilhado, com um bloco por
+hostname. O `docker-compose.prod.yml` deste projeto só conhece `app` e `db`; a app entra na rede
+externa `edge` com o nome `amigo-app`. A configuração do Caddy e os certificados ficam em
+[`INFRA-VPS.md`](./INFRA-VPS.md).
+
+### D2. Nenhum container deste projeto publica portas
 
 | Opção | Resultado |
 | --- | --- |
 | Publicar a app (`-p 8080:8080`) | app exposta, sem TLS/HSTS, firewall do host não protege |
 | Bind em loopback + túnel SSH | seguro, mas exige túnel para cada acesso; bom para *staging* |
-| **Reverse proxy publicando 80/443** (escolhido) | um ponto de entrada, TLS automático, HSTS, `/actuator` bloqueado |
+| **Caddy de borda publicando 80/443** (escolhido) | um ponto de entrada, TLS automático, HSTS, `/actuator` bloqueado |
 
-O [Caddyfile](../Caddyfile) já faz o trabalho: `reverse_proxy app:8080`, `encode zstd gzip`, remoção
-do header `Server`, HSTS e `respond 404` para `/actuator*`. O `app` não tem `ports:` no Compose de
-produção, só `expose: 8080`.
+O bloco do site no stack de borda faz `reverse_proxy amigo-app:8080`, `encode zstd gzip`, remoção do
+header `Server`, HSTS e `respond 404` para `/actuator*` (ver [`INFRA-VPS.md`](./INFRA-VPS.md)). O
+`app` não tem `ports:` no Compose de produção, só `expose: 8080`.
 
-**Auditoria rápida** — deve listar apenas o Caddy com portas no host:
+**Auditoria rápida** — `amigo-app` e o banco não devem aparecer com portas; o Caddy do stack `edge`
+é o único com 80/443:
 
 ```bash
 docker ps --format 'table {{.Names}}\t{{.Ports}}'
@@ -130,54 +141,40 @@ docker ps --format 'table {{.Names}}\t{{.Ports}}'
 | (b) build na máquina local + `docker save`/registry | rápido | depende de a máquina local ter Docker e a arquitetura certa |
 | **(c) CI com `buildx --platform linux/arm64` + push (escolhido)** | minutos no CI | exige registry e credencial |
 
-O CI atual ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) roda `docker build` no
-`ubuntu-latest`, que é **amd64**, e não publica a imagem. Se essa imagem fosse enviada para a VPS, o
-container morreria com `exec format error` — exatamente a armadilha do ARM64.
+O CI atual ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) publica a imagem ARM64 no
+GHCR:
 
-**Mudança mínima no Dockerfile para evitar emulação (QEMU):**
+- o job `test` roda a suíte e o `package`;
+- o job `image` usa `docker/setup-buildx-action` + `docker/build-push-action@v6` com
+  `platforms: linux/arm64`, `push: true` e a tag imutável `ghcr.io/<owner>/<repo>:<sha>`;
+- PRs rodam só os testes e não publicam imagem.
+
+O Dockerfile usa `$BUILDPLATFORM` no build e `$TARGETPLATFORM` no runtime. O usuário é criado em uma
+stage nativa, e a stage de runtime só copia arquivos; o HEALTHCHECK usa um BusyBox estático copiado
+de uma stage ARM64 **sem `RUN`**. Assim, `docker buildx build --platform linux/arm64` compila o jar
+nativamente e **não usa QEMU** em nenhuma etapa.
 
 ```dockerfile
-# compila o jar na arquitetura do runner (amd64), sem emular ARM
+FROM --platform=$TARGETPLATFORM busybox:1.37.0 AS busybox
 FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk AS build
-# ...
-# runtime na arquitetura de destino (arm64 na VPS)
+FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jre AS user
 FROM --platform=$TARGETPLATFORM eclipse-temurin:25-jre
 ```
 
-Com isso, `docker buildx build --platform linux/arm64` compila o jar nativamente e só baixa a camada
-ARM64 do JRE. Sem QEMU, sem Maven emulado.
-
-**Publicação (proposta de job no CI):**
-
-```yaml
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/arm64
-          push: true
-          tags: ghcr.io/<owner>/amigo-secreto:${{ github.sha }}
-```
-
-E o Compose de produção passa a usar `image:` com tag imutável (SHA) em vez de `build:`:
+O Compose de produção usa `image:` com tag imutável (SHA) em vez de `build:`:
 
 ```yaml
   app:
-    image: ghcr.io/<owner>/amigo-secreto:${APP_TAG:-latest}
+    image: ${APP_IMAGE}:${APP_TAG}
     pull_policy: always
 ```
 
-Se o registry for privado, a VPS precisa de `docker login ghcr.io` com um token de leitura.
+O `.env` traz `APP_IMAGE=ghcr.io/<owner>/amigo-secreto` e `APP_TAG=<sha-do-commit>`. Se o pacote do
+GHCR for privado, a VPS precisa de `docker login ghcr.io` com um token de leitura (`read:packages`).
+Tornar o pacote público elimina esse passo.
 
-**Plano B (somente se não houver registry):** compilar na própria VPS funciona, porque ela é ARM64
-nativa. Nesse caso, aceite o custo e controle o disco:
+**Plano B (somente se não houver registry):** compilar na própria VPS ARM64 ainda funciona, mas não é
+o fluxo documentado. Se usar, controle o disco:
 
 ```bash
 docker builder prune -f        # limpa cache de build
@@ -189,7 +186,7 @@ docker system df               # confira o que está ocupando
 
 O `ENTRYPOINT` usa `-XX:MaxRAMPercentage=75`. **Sem `mem_limit`, o container enxerga os 11 GB do
 host** e pode tentar um heap de ~8,2 GB — com ~9,7 GB livres e o Hermes também usando a máquina. Um
-pico derruba a VPS inteira por OOM.
+pico derruba a VPS inteira por OOM. O `docker-compose.prod.yml` já aplica:
 
 ```yaml
   app:
@@ -214,7 +211,8 @@ poucos dias, isso é risco operacional real.
         max-file: "3"
 ```
 
-Aplique em `app`, `caddy` e `db`. Isso é independente do access log do Caddy, que continua desligado
+Aplique em `app` e `db` (já está no `docker-compose.prod.yml`) e no Caddy do stack de borda (ver
+[`INFRA-VPS.md`](./INFRA-VPS.md)). Isso é independente do access log do Caddy, que continua desligado
 por privacidade (ver [Notas de segurança](#notas-de-segurança)).
 
 ### D6. Firewall: a Security List da Oracle é o portão real
@@ -260,13 +258,13 @@ Se faltar, prefira o instalador oficial (`get.docker.com`), que traz o plugin, e
 
 | Porta | Onde | Uso |
 | --- | --- | --- |
-| **80/tcp** | host, Caddy | redirecionamento HTTP→HTTPS e desafio ACME |
-| **443/tcp** | host, Caddy | HTTPS (produção) |
-| **443/udp** | host, Caddy | HTTP/3 (opcional; sem ela cai para h2) |
+| **80/tcp** | host, Caddy do stack `edge` | redirecionamento HTTP→HTTPS e desafio ACME |
+| **443/tcp** | host, Caddy do stack `edge` | HTTPS (produção) |
+| **443/udp** | host, Caddy do stack `edge` | HTTP/3 (opcional; sem ela cai para h2) |
 | **22/tcp** | host, sshd | administração — restrinja por IP |
-| 8080 | interno do `app` | Tomcat/Actuator; **não** publicar (host já usa 8080 com o Hermes) |
+| 8080 | interno de `amigo-app` | Tomcat/Actuator; **não** publicar (host já usa 8080 com o Hermes) |
 | 5432 | interno do `db` | Postgres; **nunca** publicar |
-| 2019 | interno do Caddy | admin API; **nunca** publicar |
+| 2019 | interno do Caddy do stack `edge` | admin API; **nunca** publicar |
 | 8081 | host, opcional | *staging* com `127.0.0.1:8081:8080` + `ssh -L` |
 
 ## Pré-requisitos
@@ -279,7 +277,10 @@ Se faltar, prefira o instalador oficial (`get.docker.com`), que traz o plugin, e
 - Na **Security List da Oracle**: `80/tcp`, `443/tcp` e `443/udp` liberadas; `22` restrita.
 - Git instalado na VPS.
 - Espaço em disco: **≥ 5 GB** livres para imagem + volumes. Há ~29 GB hoje.
-- Registry de imagens (GitHub Container Registry ou equivalente) se for seguir D3(c).
+- **Stack de borda (Caddy) já criado e de pé**, com a rede externa `edge` e o site desta aplicação
+  (`reverse_proxy amigo-app:8080`). Configuração em [`INFRA-VPS.md`](./INFRA-VPS.md).
+- Acesso ao **GitHub Container Registry** (GHCR) para puxar a imagem; se o pacote for privado,
+  `docker login ghcr.io` com um token de leitura (`read:packages`).
 
 ## Instalação do Docker
 
@@ -318,11 +319,12 @@ docker ps --format 'table {{.Names}}\t{{.Ports}}'
 ss -lntup | grep -E ':(80|443|8080|5432|2019)\b'
 ```
 
-O esperado: só `caddy` aparece publicando 80/443. Nenhum listener em 5432 ou 2019.
+O esperado: só o `caddy` do stack `edge` aparece publicando 80/443. `amigo-app` e o banco não
+devem aparecer com portas. Nenhum listener em 5432 ou 2019.
 
-> **Nunca rode `docker compose up` sem `-f docker-compose.prod.yml` nesta VPS.** O arquivo de
-> desenvolvimento está no mesmo diretório e publica `5432`. Enquanto a pendência P1 não for aplicada,
-> esse comando exporia o Postgres na internet. Um alias ajuda:
+> **Sempre prefira `-f docker-compose.prod.yml` nesta VPS.** O arquivo de desenvolvimento está no
+> mesmo diretório, roda com o nome de projeto `amigo-secreto-dev` e publica o Postgres apenas em
+> loopback, mas não é o caminho de produção. Um alias ajuda:
 >
 > ```bash
 > alias dc='docker compose -f docker-compose.prod.yml'
@@ -330,8 +332,8 @@ O esperado: só `caddy` aparece publicando 80/443. Nenhum listener em 5432 ou 20
 
 ## Primeiro deploy
 
-> Estes passos assumem que as [pendências no código](#pendências-no-código-antes-de-executar) foram
-> aplicadas. Se ainda não foram, veja a nota no passo 4.
+> Estes passos assumem as pendências de deploy já aplicadas (elas estão no repositório). O que
+> depende de fora está em [O que configurar fora do projeto](#o-que-configurar-fora-do-projeto).
 
 1. **Clonar o projeto**
 
@@ -347,57 +349,81 @@ O esperado: só `caddy` aparece publicando 80/443. Nenhum listener em 5432 ou 20
    ```bash
    cp .env.prod.example .env
    chmod 600 .env
-   # edite POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DOMAIN, ACME_EMAIL e as variáveis de e-mail
+   # edite POSTGRES_*, DOMAIN, APP_IMAGE, APP_TAG, EDGE_NETWORK,
+   # as variáveis RATE_LIMIT_* e as de e-mail
    ```
 
    Gere a senha do banco com `openssl rand -hex 32` (evite `$`, espaços, `#` e `=` nos valores).
-   `DOMAIN` é só o host, sem esquema e sem barra final (`amigo.exemplo.com`).
+   `DOMAIN` é só o host, sem esquema e sem barra final (`amigo-secreto.barbosalabs.dev`).
+   `APP_IMAGE` é o repositório do GHCR e `APP_TAG` é o **SHA do commit** publicado pelo CI.
+   `ACME_EMAIL` **não** fica aqui: pertence ao `.env` do stack de borda.
 
    > `.env` e `.env.*` estão no `.gitignore`; `.env.prod.example` é versionado e serve de modelo.
 
-3. **Conferir a configuração resolvida**
+3. **Conferir a rede de borda e o Caddy**
+
+   ```bash
+   set -a; source .env; set +a
+   docker network ls | grep -w "${EDGE_NETWORK:-edge}" \
+     || docker network create "${EDGE_NETWORK:-edge}"
+   docker ps --format 'table {{.Names}}\t{{.Ports}}'
+   ```
+
+   O Caddy do stack `edge` precisa estar de pé e publicando 80/443. Se esta for a primeira
+   migração, suba o stack de borda **antes** deste deploy e pare o Caddy antigo para não disputar as
+   portas (ver [`INFRA-VPS.md`](./INFRA-VPS.md)).
+
+4. **Conferir a configuração resolvida**
 
    ```bash
    docker compose -f docker-compose.prod.yml config
    ```
 
    O comando imprime a configuração final (com as variáveis do `.env`). Não copie essa saída para
-   lugar público. Confira principalmente: `mem_limit`, `logging`, e se `app`/`db` estão **sem**
-   `published`/`ports`.
+   lugar público. Confira principalmente: `image`/`APP_TAG`, `mem_limit`, `cpus`, `logging`, a rede
+   `edge` como externa e se `app`/`db` estão **sem** `published`/`ports`.
 
-4. **Subir**
+5. **Subir**
 
-   | Origem da imagem | Comando |
-   | --- | --- |
-   | Registry (recomendado, D3c) | `docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d` |
-   | Build local na VPS (plano B) | `docker compose -f docker-compose.prod.yml up -d --build` |
+   ```bash
+   APP_TAG=<sha-do-commit> bash scripts/deploy.sh
+   ```
 
-   Ordem esperada: `db` sobe e fica `healthy`, `app` sobe (imagem baixada ou buildada), o Flyway
-   aplica as migrações e o healthcheck fica `healthy`, depois o Caddy pede o certificado.
+   O script valida a rede `edge`, roda `pull` da imagem, `up -d --remove-orphans` e espera o
+   healthcheck de `amigo-app`. O equivalente manual:
 
-5. **Conferir saúde e logs**
+   ```bash
+   docker compose -f docker-compose.prod.yml pull
+   docker compose -f docker-compose.prod.yml up -d --remove-orphans
+   ```
+
+   Ordem esperada: `db` sobe e fica `healthy`, `app` sobe com a imagem do registry, o Flyway aplica
+   as migrações e o healthcheck fica `healthy`. O certificado é emitido pelo Caddy de borda.
+
+6. **Conferir saúde e logs**
 
    ```bash
    docker compose -f docker-compose.prod.yml ps
    docker compose -f docker-compose.prod.yml logs --tail=200 app
-   docker compose -f docker-compose.prod.yml logs --tail=100 caddy
+   # logs do Caddy ficam no stack de borda:
+   docker compose -f /opt/edge/compose.yml logs --tail=100 caddy
    ```
 
-   `ps` deve mostrar `db (healthy)`, `app (healthy)` e `caddy (running)`.
+   `ps` deve mostrar `db (healthy)` e `amigo-app (healthy)`. O Caddy aparece no stack `edge`.
 
-6. **Testar HTTPS**
+7. **Testar HTTPS**
 
    ```bash
-   curl -sS -o /dev/null -w '%{http_code}\n' https://amigo.exemplo.com/
-   curl -sSI https://amigo.exemplo.com/ | grep -i strict-transport-security
-   curl -sS https://amigo.exemplo.com/robots.txt
-   curl -sS -o /dev/null -w '%{http_code}\n' https://amigo.exemplo.com/actuator/health
+   curl -sS -o /dev/null -w '%{http_code}\n' https://amigo-secreto.barbosalabs.dev/
+   curl -sSI https://amigo-secreto.barbosalabs.dev/ | grep -i strict-transport-security
+   curl -sS https://amigo-secreto.barbosalabs.dev/robots.txt
+   curl -sS -o /dev/null -w '%{http_code}\n' https://amigo-secreto.barbosalabs.dev/actuator/health
    ```
 
    Esperado: `200`, HSTS presente, `robots.txt` com `Disallow: /` e **404** em `/actuator/health`.
    O healthcheck real roda dentro do container, em `localhost:8080`.
 
-7. **Confirmar que o Flyway aplicou do zero**
+8. **Confirmar que o Flyway aplicou do zero**
 
    ```bash
    docker compose -f docker-compose.prod.yml exec db \
@@ -406,13 +432,15 @@ O esperado: só `caddy` aparece publicando 80/443. Nenhum listener em 5432 ou 20
 
    O schema é do Flyway (`ddl-auto=validate`). Migração aplicada não se edita: crie a próxima versão.
 
-8. **Auditar portas e disco**
+9. **Auditar portas e disco**
 
    ```bash
    docker ps --format 'table {{.Names}}\t{{.Ports}}'
    df -h /
    docker system df
    ```
+
+   Só o Caddy do stack `edge` deve publicar 80/443. `amigo-app` e o banco não publicam portas.
 
 ## E-mail (Brevo) no deploy
 
@@ -461,14 +489,13 @@ Antes de enviar a mudança, rode os testes na sua máquina (`.\mvnw.cmd test` no
 cd /opt/amigo-secreto
 git pull
 
-# imagem de registry (recomendado)
-export APP_TAG=<sha-ou-tag>
+# tag imutável publicada pelo CI para o commit atual
+APP_TAG=<sha-do-commit> bash scripts/deploy.sh
+
+# equivalente manual
+export APP_TAG=<sha-do-commit>
 docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-
-# plano B: build local na VPS
-# docker compose -f docker-compose.prod.yml up -d --build
-
+docker compose -f docker-compose.prod.yml up -d --remove-orphans
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs --tail=100 app
 ```
@@ -476,26 +503,21 @@ docker compose -f docker-compose.prod.yml logs --tail=100 app
 Regras:
 
 - Só faça deploy com os testes verdes.
+- O CI precisa ter publicado a imagem `ghcr.io/<owner>/amigo-secreto:<sha>` antes do `pull`.
 - Em banco vazio, valide o Flyway aplicando do zero antes de anunciar a versão.
 - Depois do `up`, confira `ps` e o health; se a app não ficar `healthy`, leia `logs app`.
 - `up -d` recria apenas o que mudou; o volume `pgdata` fica intacto.
 - Use **tag imutável** (SHA do commit), não `latest`, para que rollback seja determinístico.
+- O Caddy de borda não é reiniciado por este deploy; ele só precisa do site apontando para
+  `amigo-app:8080`.
 
 ## Rollback
 
-- **Aplicação com registry (recomendado):** volte a tag anterior.
+- **Aplicação:** volte ao `APP_TAG` anterior e rode o mesmo script. O `up -d` recria o container com a
+  imagem antiga.
 
   ```bash
-  export APP_TAG=<sha-anterior>
-  docker compose -f docker-compose.prod.yml pull
-  docker compose -f docker-compose.prod.yml up -d
-  ```
-
-- **Aplicação com build local:** volte para o commit anterior e reconstrua.
-
-  ```bash
-  git checkout <commit-ou-tag-anterior>
-  docker compose -f docker-compose.prod.yml up -d --build
+  APP_TAG=<sha-anterior> bash scripts/deploy.sh
   ```
 
 - **Banco:** o Flyway não reverte migração. Rollback de schema = restaurar o dump anterior com
@@ -505,7 +527,7 @@ Regras:
 
 ```bash
 cd /opt/amigo-secreto
-./scripts/backup-postgres.sh
+bash scripts/backup-postgres.sh
 ```
 
 Gera `backups/amigo-secreto-AAAAMMDD-HHMMSS.dump` (`pg_dump -Fc`), com permissão `600`, e apaga
@@ -514,7 +536,7 @@ dumps com mais de 14 dias (`RETENTION_DAYS` sobrescreve).
 Cron sugerido (backup diário às 03:15), rodando como um usuário do grupo `docker`:
 
 ```cron
-15 3 * * * cd /opt/amigo-secreto && ./scripts/backup-postgres.sh >> /var/log/amigo-secreto-backup.log 2>&1
+15 3 * * * cd /opt/amigo-secreto && bash scripts/backup-postgres.sh >> /var/log/amigo-secreto-backup.log 2>&1
 ```
 
 - **Mantenha cópia fora da VPS** (`rclone`/`rsync`). Backup no mesmo disco não protege contra perda
@@ -527,7 +549,7 @@ Cron sugerido (backup diário às 03:15), rodando como um usuário do grupo `doc
 
 ```bash
 cd /opt/amigo-secreto
-./scripts/restore-postgres.sh backups/amigo-secreto-20260101-030000.dump
+bash scripts/restore-postgres.sh backups/amigo-secreto-20260101-030000.dump
 ```
 
 O script:
@@ -554,20 +576,22 @@ docker rm -f restore-test
 
 ## Notas de segurança
 
-- **HTTPS obrigatório.** Não publique a app em HTTP; o Caddy redireciona e emite o certificado.
+- **HTTPS obrigatório.** Não publique a app em HTTP; o Caddy do stack de borda redireciona e emite o
+  certificado.
 - **Tokens nas URLs.** Painel/participante/convite são acessados por link com token: **nunca
-  habilite access log** no proxy (o `Caddyfile` não tem `log`) nem log de requisição na aplicação.
-  O token está no *path*, não na query string — filtro de query não resolveria.
+  habilite access log** no proxy (o site do stack `edge` não tem `log`) nem log de requisição na
+  aplicação. O token está no *path*, não na query string — filtro de query não resolveria.
 - **Rate limiting.** Implementado em memória por IP (`POST /events`, `/join`, `draw`/`redraw` e
   wishlist), com `429` + `Retry-After`. Os limites vêm de `RATE_LIMIT_*` no `.env`; sem elas valem
-  os padrões de [`RATE-LIMITING.md`](RATE-LIMITING.md). Depois do deploy, confirme que o Caddy
-  entrega o IP real e que um `X-Forwarded-For` forjado não engana o filtro **antes de divulgar o
-  link**.
-- **Actuator interno.** Só `health` é exposto (ver `application.yaml`), sem detalhes; o `Caddyfile`
-  responde 404 para `/actuator/*` e o container não publica porta no host.
-- **Postgres sem porta pública.** Só o Caddy publica portas; `db` e `app` usam `expose`/rede interna.
-  O Compose de desenvolvimento publica 5432 e **não** deve rodar nesta VPS (pendência P1).
-- **Admin API do Caddy (2019)** não é publicada. Não adicione `ports` para ela.
+  os padrões de [`RATE-LIMITING.md`](RATE-LIMITING.md). Depois do deploy, confirme que o Caddy de
+  borda entrega o IP real e que um `X-Forwarded-For` forjado não engana o filtro **antes de divulgar
+  o link**.
+- **Actuator interno.** Só `health` é exposto (ver `application.yaml`), sem detalhes; o site do stack
+  `edge` responde 404 para `/actuator/*` e o container não publica porta no host.
+- **Postgres sem porta pública.** Nenhum container deste projeto publica portas; `db` e `app` usam
+  `expose`/rede interna. O Compose de desenvolvimento publica 5432 apenas em loopback e **não** deve
+  rodar nesta VPS.
+- **Admin API do Caddy (2019)** não é publicada no stack de borda. Não adicione `ports` para ela.
 - **`.env` fora do Git**, com `chmod 600`. Senha do banco com 32+ bytes aleatórios.
 - **`SESSION_COOKIE_SECURE=true`** e `APP_BASE_URL=https://<domínio>` (sem barra final) já vêm do
   Compose; se mudar o domínio, atualize o `.env` e recrie a app (`up -d app`).
@@ -582,44 +606,43 @@ docker rm -f restore-test
   ([D5](#d5-rotação-de-log-do-docker)) são parte da segurança operacional: um OOM ou disco cheio
   derruba o site.
 - Atualize a imagem base e as dependências com regularidade; rode `docker compose ... pull` para
-  renovar `postgres` e `caddy`.
+  renovar `postgres` e o stack de borda separadamente.
 
 ## Problemas comuns
 
 | Sintoma | Verificação |
 | --- | --- |
-| `exec format error` | imagem foi buildada para amd64; rebuild com `--platform linux/arm64` (D3) |
+| `exec format error` | imagem foi buildada para amd64; use a imagem `linux/arm64` publicada pelo CI (D3) |
 | `app` reinicia em loop | `logs app`: conexão com `db`, credenciais do `.env`, Flyway |
-| `app` unhealthy | `docker compose -f docker-compose.prod.yml exec app curl -fsS http://localhost:8080/actuator/health` |
-| Caddy não emite certificado | DNS aponta para a VPS? 80/443 abertas **na Security List**? `logs caddy` |
-| `502 Bad Gateway` | `app` está `healthy`? `docker compose -f docker-compose.prod.yml ps` |
+| `app` unhealthy | `docker compose -f docker-compose.prod.yml exec app /bin/busybox wget -q -O - http://localhost:8080/actuator/health` |
+| Caddy não emite certificado | no stack `edge`: DNS aponta para a VPS? 80/443 abertas **na Security List**? `docker compose -f /opt/edge/compose.yml logs caddy` |
+| `502 Bad Gateway` | `amigo-app` está `healthy`? A app está na rede `edge`? `docker compose -f docker-compose.prod.yml ps` |
+| `network edge not found` | a rede externa não existe; `docker network create edge` e suba o stack de borda |
 | `up` falha por variável vazia | `.env` ausente ou incompleto; rode `docker compose -f docker-compose.prod.yml config` |
 | Senha do banco mudou no `.env` | A senha só é aplicada na criação do volume; em banco existente, altere via `psql` |
-| `port is already allocated` | outra coisa usa a porta; 8080 é do Hermes. Use `expose`, não `ports` |
-| Postgres acessível de fora | alguém rodou o Compose de dev; confira `docker ps` e derrube o container |
+| `port is already allocated` | 80/443 pertencem ao Caddy do stack `edge`; a app não publica portas. 8080 do host é do Hermes |
+| Postgres acessível de fora | confira `docker ps`: só o Caddy de borda pode publicar portas; o Compose de dev usa loopback |
 | Disco enchendo | `docker system df`; `docker builder prune -f`; `docker image prune -f`; confira `du -sh backups` |
-| Container morre por OOM | falta `mem_limit` (D4); `docker inspect` mostra `OOMKilled` |
+| Container morre por OOM | confira `mem_limit` (D4); `docker inspect` mostra `OOMKilled` |
 | `docker compose: command not found` | plugin v2 ausente; instale via `get.docker.com` (D7) |
 
-## Pendências no código antes de executar
+## Pendências de deploy aplicadas (2026-11-15)
 
-Estas são divergências entre este documento e os arquivos atuais. **Quem for configurar a VPS deve
-aplicá-las (ou confirmar que já foram aplicadas) antes de seguir os passos.**
+As divergências que este documento listava foram corrigidas no código e na configuração:
 
-| # | Pendência | Arquivo | Por quê |
-| --- | --- | --- | --- |
-| **P1** | Trocar `"5432:5432"` por `"127.0.0.1:5432:5432"` | `docker-compose.yml` (dev) | na VPS, o bind em `0.0.0.0` expõe o Postgres e o Docker fura o `INPUT` |
-| **P2** | Adicionar `mem_limit: 1g` e `cpus: "1.0"` no `app` | `docker-compose.prod.yml` | sem teto, `MaxRAMPercentage=75` usa os 11 GB do host |
-| **P3** | Adicionar bloco `logging` (10m × 3) em `app`, `caddy`, `db` | `docker-compose.prod.yml` | `json-file` sem limite enche o disco |
-| **P4** | Usar `--platform=$BUILDPLATFORM` / `$TARGETPLATFORM` | `Dockerfile` | evita emular ARM ao compilar para a VPS |
-| **P5** | CI com `buildx` + `--platform linux/arm64` + push para registry | `.github/workflows/ci.yml` | hoje builda amd64 e não publica |
-| **P6** | Trocar `build:` por `image:` com tag imutável | `docker-compose.prod.yml` | deploy e rollback determinísticos, sem compilar na VPS |
-| **P7** | Atualizar este documento e `implementation.md` após decidir | ambos | manter a documentação fiel ao estado real |
+| # | Pendência | Estado |
+| --- | --- | --- |
+| **P1** | Postgres de dev em loopback | aplicado: `127.0.0.1:5432:5432` e projeto `amigo-secreto-dev` |
+| **P2** | `mem_limit: 1g` e `cpus: "1.0"` no `app` | aplicado no Compose de produção |
+| **P3** | Rotação de log (10m × 3) | aplicado em `app` e `db`; o Caddy tem o mesmo bloco no stack `edge` |
+| **P4** | `--platform=$BUILDPLATFORM` / `$TARGETPLATFORM` | aplicado; o runtime não executa `RUN`, então o build ARM64 não usa QEMU |
+| **P5** | CI com `buildx` ARM64 + push no GHCR | aplicado: job `image` publica `ghcr.io/<owner>/<repo>:<sha>` |
+| **P6** | `image:` com tag imutável no lugar de `build:` | aplicado: `APP_IMAGE:APP_TAG` com `pull_policy: always` |
+| **P7** | Documentação sincronizada | aplicado neste documento, no `implementation.md` e no `INFRA-VPS.md` |
+| **P8** | Caddy de borda | arquitetura adotada; configuração externa (ver [`INFRA-VPS.md`](./INFRA-VPS.md)) |
 
-Opcional, fora do escopo do primeiro deploy:
-
-- **P8** — extrair o Caddy para um stack de borda e compartilhar a VPS com outras aplicações. Ver
-  [`INFRA-VPS.md`](./INFRA-VPS.md).
+O que continua **fora do repositório** está na seção
+[O que configurar fora do projeto](#o-que-configurar-fora-do-projeto).
 
 ## Checklist para quem for configurar a VPS
 
@@ -642,33 +665,98 @@ Ordem sugerida. Cada item tem um comando de verificação; não avance sem ele.
    ```bash
    docker --version || echo "docker ausente"
    ```
-4. **Aplicar P1–P6** e rodar os testes do projeto.
+4. **Confirmar que P1–P6 estão aplicadas** (já estão no código) e rodar os testes do projeto.
 5. **Instalar Docker + Compose v2** e validar `docker compose version`.
 6. **Liberar 80/443 tcp + 443 udp na Security List da Oracle** (fora do host).
-7. **Publicar a imagem ARM64** no registry (P5) e confirmar:
+7. **Criar a rede `edge` e subir o stack de borda** (Caddy) — ver
+   [`INFRA-VPS.md`](./INFRA-VPS.md). Confirmar que só o Caddy publica 80/443.
+8. **Publicar/confirmar a imagem ARM64** no GHCR e, se privado, fazer `docker login` na VPS:
    ```bash
-   docker buildx imagetools inspect ghcr.io/<owner>/amigo-secreto:<tag>
+   docker buildx imagetools inspect ghcr.io/<owner>/amigo-secreto:<sha>
    ```
-8. **Criar `/opt/amigo-secreto`, `.env` e conferir `config`**.
-9. **Subir com `pull` + `up -d`** e validar `ps`, `logs` e HTTPS.
-10. **Auditar** `docker ps` (só Caddy publica), `df -h`, `docker system df`.
-11. **Configurar cron de backup** e cópia fora da VPS.
-12. **Registrar no `implementation.md`** o que foi executado e o que mudou.
+9. **Criar `/opt/amigo-secreto`, o `.env` e conferir `docker compose ... config`**.
+10. **Subir com `APP_TAG=<sha> bash scripts/deploy.sh`** e validar `ps`, `logs` e HTTPS.
+11. **Auditar** `docker ps` (só o Caddy de borda publica), `df -h`, `docker system df`.
+12. **Configurar cron de backup** e cópia fora da VPS.
+13. **Registrar no `implementation.md`** o que foi executado e o que mudou.
 
 Coisas que **não** devem ser alteradas sem conversa:
 
-- `Caddyfile` sem `log` (privacidade dos tokens).
+- O site do stack de borda **sem `log`** (privacidade dos tokens no path).
 - `robots.txt` com `Disallow: /`.
 - `app`/`db` sem `ports` no Compose de produção.
 - `ddl-auto=validate` — o schema é do Flyway.
 - `MaxRAMPercentage` do Dockerfile (ele fica correto **com** `mem_limit`).
 
+## O que configurar fora do projeto
+
+Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no repositório.
+
+### 1. DNS
+
+- Registro **A** de `amigo-secreto.barbosalabs.dev` apontando para o IP da VPS (e **AAAA** se houver
+  IPv6).
+- `mail.barbosalabs.dev` já autenticado no Brevo (Brevo code + DKIM + DMARC). **Não** crie um segundo
+  DMARC.
+- O Caddy de borda emite/renova o certificado; não é preciso certificado manual.
+
+### 2. Oracle Cloud (Security List / NSG)
+
+- Liberar `80/tcp`, `443/tcp` e `443/udp`.
+- Manter `22/tcp` restrita por IP, se possível.
+- **Não** liberar `5432`, `8080` nem `2019`.
+
+### 3. Stack de borda (`/opt/edge`)
+
+- Criar a rede: `docker network create edge` (ou o nome configurado em `EDGE_NETWORK`).
+- Criar `/opt/edge/compose.yml`, `Caddyfile`, `sites/amigo-secreto.caddy` e `.env` com `DOMAIN` e
+  `ACME_EMAIL`. Os arquivos e a topologia estão em [`INFRA-VPS.md`](./INFRA-VPS.md).
+- O site desta app deve fazer `reverse_proxy amigo-app:8080`, responder 404 para `/actuator*`, enviar
+  HSTS e **não** ter `log` (o token está no path).
+- `docker compose -f /opt/edge/compose.yml up -d`; validar HTTPS, HSTS e `/actuator/health` 404.
+- O Caddy é o único a publicar 80/443 e é ponto único de falha para todas as apps da VPS.
+
+### 4. GitHub Container Registry (GHCR)
+
+- O CI publica `ghcr.io/michaelmelobarbosa/amigo-secreto:<sha>` a cada push.
+- O workflow declara `permissions: packages: write`. Se o push falhar com 403, confira em
+  **Settings → Actions → General → Workflow permissions** se o repositório permite leitura e escrita
+  para o `GITHUB_TOKEN`.
+- Se o pacote for **privado**, a VPS precisa de `docker login ghcr.io` com um token de leitura
+  (`read:packages`). Tornar o pacote público elimina esse passo.
+- Confirme a imagem do commit antes do deploy:
+  `docker buildx imagetools inspect ghcr.io/michaelmelobarbosa/amigo-secreto:<sha>`.
+- O GITHUB_TOKEN do Actions já publica; não é preciso criar secret para o push.
+
+### 5. `.env` da aplicação (`/opt/amigo-secreto/.env`)
+
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (32+ bytes aleatórios).
+- `DOMAIN` (host sem esquema), `APP_IMAGE`, `APP_TAG` (SHA), `EDGE_NETWORK` (padrão `edge`).
+- `RATE_LIMIT_*` (os padrões já são os recomendados) e as variáveis de e-mail.
+- `chmod 600`. Nunca commitar. `ACME_EMAIL` fica no `.env` do stack de borda, não aqui.
+
+### 6. Brevo (fase 2)
+
+- Domínio de envio `mail.barbosalabs.dev` autenticado; sender `no-reply@mail.barbosalabs.dev`.
+- API key de **produção** separada da de dev; se usar allowlist de IP, cadastrar o IP de saída da
+  VPS.
+- Para envio real: `EMAIL_ENABLED=true`, `EMAIL_WORKER_ENABLED=true`, `BREVO_SANDBOX=false`.
+
+### 7. Backup e restore
+
+- Cron diário rodando `bash scripts/backup-postgres.sh` (exemplo em [Backup](#backup)).
+- Copiar os dumps para fora da VPS (`rclone`/`rsync`): backup no mesmo disco não protege contra a
+  perda da VPS.
+- Testar o restore periodicamente com `scripts/restore-postgres.sh`.
+
 ## O que ainda não foi validado
 
 O Docker não está instalado na máquina de desenvolvimento, então o build da imagem, a subida do
-Compose e o healthcheck foram escritos e revisados, mas **não executados**. Do lado da VPS, o Hermes
-levantou o ambiente, mas nada deste projeto foi rodado lá ainda.
+Compose e o healthcheck foram escritos e revisados, mas **não executados localmente**. O CI ainda não
+rodou o novo job de publicação; a primeira execução valida o build ARM64. Do lado da VPS, o Hermes
+levantou o ambiente, mas o stack de borda e esta aplicação ainda não foram rodados lá.
 
-No primeiro deploy, valide nesta ordem: `docker compose -f docker-compose.prod.yml config`,
-`pull`, `up -d`, `ps`/`logs`, HTTPS e a auditoria de portas. Depois confirme que o rate limiting
-conta o IP real do cliente (e não o do Caddy) antes de divulgar o link. Só então divulgue.
+No primeiro deploy, valide nesta ordem: rede `edge` e stack de borda de pé, `docker compose -f
+docker-compose.prod.yml config`, `pull`, `up -d`, `ps`/`logs`, HTTPS e a auditoria de portas. Depois
+confirme que o rate limiting conta o IP real do cliente (e não o do Caddy) antes de divulgar o link.
+Só então divulgue.

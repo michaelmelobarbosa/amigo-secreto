@@ -40,7 +40,7 @@ Pacotes por funcionalidade em `br.com.michael.amigosecreto`: `event`, `participa
 
 ## O que já existe
 
-`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail e o rate limiting em memória estão implementados; falta aplicar as pendências P1–P6 de deploy (`docs/DEPLOY.md`), validar o IP real atrás do Caddy e executar o deploy na VPS.
+`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail, o rate limiting e as pendências P1–P6 de deploy estão implementados; o Caddy é um stack de borda externo. Falta configurar DNS, rede `edge`, stack de borda e imagem no GHCR na VPS, validar o IP real atrás do Caddy e executar o primeiro deploy.
 
 ## Agentes do projeto
 

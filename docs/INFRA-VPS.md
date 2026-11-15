@@ -9,14 +9,11 @@ aplicações da máquina.
 > pelo Hermes em 2026-11-14. Fatos operacionais detalhados e implicações estão em
 > [`DEPLOY.md#ambiente-da-vps`](./DEPLOY.md#ambiente-da-vps).
 
-## Estado atual vs. alvo
+## Estado atual
 
-**Hoje:** o Caddy está dentro do Compose do Amigo Secreto (`db` + `app` + `caddy`). Ele publica
-80/443 e só conhece o `app` deste projeto.
-
-**Alvo, quando houver uma segunda aplicação:** o Caddy deixa de pertencer ao projeto e passa a ser um
-**stack de borda**, compartilhado. Cada aplicação mantém o próprio `Dockerfile` e o próprio Compose
-(com a rede privada do seu banco) e se conecta a uma **rede de borda** para receber tráfego.
+O Caddy **já foi desacoplado** deste projeto: o Compose do Amigo Secreto tem apenas `app` e `db`;
+o Caddy vive em um stack `edge`, compartilhado com as demais aplicações da VPS. O ingress roteia
+por hostname na 443 e alcança `amigo-app:8080` pela rede externa `edge`.
 
 ```
 Internet ──▶ caddy :80/:443            stack "edge" (rede edge)
@@ -24,6 +21,11 @@ Internet ──▶ caddy :80/:443            stack "edge" (rede edge)
               ├──▶ amigo-app:8080  ──▶ amigo-db:5432   (rede privada do projeto)
               └──▶ outra-app:3000  ──▶ outra-db:5432   (rede privada do projeto)
 ```
+
+O que fica neste repositório: `docker-compose.prod.yml` com `app` + `db`, a imagem da app e os
+scripts de operação. O que fica no stack de borda: `Caddyfile`, `sites/*.caddy`, certificados e a
+rede `edge`. O `Caddyfile` que antes estava na raiz deste projeto foi removido para não sugerir
+duas fontes de verdade.
 
 ## Opções consideradas
 
@@ -119,6 +121,7 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
+      DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
@@ -139,6 +142,13 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+```
+
+O `.env` do stack fica em `/opt/edge/.env` e é a única fonte desses valores:
+
+```bash
+DOMAIN=amigo-secreto.barbosalabs.dev
+ACME_EMAIL=voce@exemplo.com
 ```
 
 - `caddy_data` guarda certificados e chaves: **precisa persistir**. Recriar o container sem o volume
@@ -162,7 +172,7 @@ import sites/*.caddy
 
 ```caddyfile
 # edge/sites/amigo-secreto.caddy
-amigo.exemplo.com {
+{$DOMAIN} {
     encode zstd gzip
 
     @actuator path /actuator /actuator/*
@@ -179,14 +189,21 @@ amigo.exemplo.com {
 }
 ```
 
+`DOMAIN` e `ACME_EMAIL` vêm do `.env` do stack de borda. O valor de `DOMAIN` é o mesmo
+`amigo-secreto.barbosalabs.dev` usado no `.env` da aplicação (que monta o `APP_BASE_URL`).
+
 ### App do Amigo Secreto
 
 ```yaml
 # docker-compose.prod.yml (trecho)
 services:
   app:
+    image: ${APP_IMAGE}:${APP_TAG}
+    container_name: amigo-app
     expose:
       - "8080"
+    mem_limit: 1g
+    cpus: "1.0"
     networks: [internal, edge]   # internal = app + db
 
   db:
@@ -196,6 +213,7 @@ networks:
   internal: {}
   edge:
     external: true
+    name: ${EDGE_NETWORK:-edge}
 ```
 
 O nome usado no `reverse_proxy` (`amigo-app`) precisa ser o nome resolvível do container na rede
@@ -338,18 +356,25 @@ Se o Caddy escrever em arquivo, monte `/var/log/caddy` em volume e use `roll_siz
 Access log é dado pessoal. Defina prazo (30–90 dias é razoável) e faça o `roll_keep_for` cumprir
 sozinho. Documente a decisão no projeto dono do site.
 
-## Plano de migração (quando a segunda app chegar)
+## Migração para o stack de borda (aplicada)
+
+O que já está no repositório:
+
+- [x] `docker-compose.prod.yml` sem `caddy`, com `container_name: amigo-app` e redes `internal` + `edge`.
+- [x] `Caddyfile` da raiz removido (a fonte de verdade passou a ser o stack de borda).
+- [x] `APP_IMAGE`/`APP_TAG`, `mem_limit`, `cpus`, logging e imagem ARM64 publicada pelo CI.
+
+O que fica **fora** do repositório:
 
 1. Criar a rede: `docker network create edge`.
-2. Criar `edge/compose.yml` + `edge/Caddyfile` + `edge/sites/amigo-secreto.caddy`.
-3. No Compose do Amigo Secreto: remover o serviço `caddy`, adicionar `container_name: amigo-app`
-   (ou alias) e incluir `edge` em `networks`.
-4. `docker compose -f edge/compose.yml up -d` e, no projeto, `up -d`.
-5. Validar: HTTPS, `/actuator` 404, HSTS, e `docker ps` mostrando só o Caddy publicando portas.
-6. Só então adicionar a segunda aplicação.
+2. Criar `/opt/edge` com `compose.yml`, `Caddyfile`, `sites/amigo-secreto.caddy` e `.env`
+   (`DOMAIN`, `ACME_EMAIL`).
+3. `docker compose -f /opt/edge/compose.yml up -d`.
+4. No projeto: `APP_TAG=<sha> bash scripts/deploy.sh`.
+5. Validar: HTTPS, `/actuator` 404, HSTS e `docker ps` mostrando só o Caddy publicando portas.
 
-**Cuidado na migração:** não rode os dois Caddys ao mesmo tempo — 80/443 só aceitam um processo.
-Pare o antigo antes de subir o novo, ou aceite alguns segundos de 502.
+**Cuidado na primeira migração:** não rode os dois Caddys ao mesmo tempo — 80/443 só aceitam um
+processo. Pare o antigo antes de subir o novo, ou aceite alguns segundos de 502.
 
 ## Riscos e pontos abertos
 
@@ -377,3 +402,4 @@ Pare o antigo antes de subir o novo, ou aceite alguns segundos de 502.
 | 2026-11-14 | Access log desligado no site do Amigo Secreto | tokens no path das URLs |
 | 2026-11-14 | Caddy desacoplável para stack de borda (opção A) quando houver segunda app | evita acoplar ciclos de deploy; roteia por SNI na 443 |
 | 2026-11-14 | Um Postgres por projeto, não um cluster compartilhado | isolamento de backup/restore, versão, credenciais e locks; custo de ~100 MB é irrelevante neste porte |
+| 2026-11-15 | Caddy desacoplado de fato: `edge` fora deste repositório | a app publica só `expose: 8080`; o ingress é compartilhado e roteia várias apps |
