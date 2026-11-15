@@ -24,7 +24,6 @@ target/
 docker-compose*.yml
 Dockerfile
 .dockerignore
-Caddyfile
 scripts/
 docs/
 backups/
