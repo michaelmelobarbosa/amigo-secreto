@@ -37,7 +37,7 @@ Aplicação web para organizar amigo secreto **sem login**, com acesso por links
 - **PostgreSQL** em dev/prod; **H2** apenas nos testes
 - Thymeleaf + CSS próprio (sem SPA, sem HTMX no MVP)
 - Brevo (API transacional) para e-mail opcional na fase 2
-- Docker multi-stage + Docker Compose + Caddy (HTTPS automático) no deploy
+- Docker multi-stage + Docker Compose (app + Postgres); Caddy de borda externo com HTTPS automático
 
 ## Como rodar localmente
 
@@ -73,7 +73,7 @@ Pré-requisitos: **JDK 25** e **Docker** (para o Postgres). No Windows, use `.\m
    .\mvnw.cmd -DskipTests package
    ```
 
-Variáveis principais: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `APP_BASE_URL`, `SESSION_COOKIE_SECURE` e as de e-mail (`EMAIL_ENABLED`, `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, `BREVO_SANDBOX`). Veja [`.env.example`](.env.example).
+Variáveis principais: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `APP_BASE_URL`, `SESSION_COOKIE_SECURE`, as de e-mail (`EMAIL_ENABLED`, `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, `BREVO_SANDBOX`) e `RATE_LIMIT_*`. No deploy, também `APP_IMAGE`, `APP_TAG` e `EDGE_NETWORK`. Veja [`.env.example`](.env.example) e [`.env.prod.example`](.env.prod.example).
 
 ### Habilitar e-mail localmente
 
@@ -95,13 +95,15 @@ Em produção, o `docker-compose.prod.yml` passa essas variáveis a partir do `.
 
 ## Deploy
 
-O passo a passo completo está em [docs/DEPLOY.md](docs/DEPLOY.md): Dockerfile multi-stage, `docker-compose.prod.yml` (app + Postgres + Caddy), HTTPS/Let's Encrypt, healthcheck, backup e restore.
+O passo a passo completo está em [docs/DEPLOY.md](docs/DEPLOY.md): imagem ARM64 publicada no GHCR pelo CI, `docker-compose.prod.yml` (app + Postgres), healthcheck, backup e restore. O **Caddy é um stack de borda separado**, compartilhado com outras aplicações da VPS; a configuração dele está em [docs/INFRA-VPS.md](docs/INFRA-VPS.md).
 
 ```bash
 cp .env.prod.example .env
-# preencha DOMAIN, ACME_EMAIL, POSTGRES_*
-docker compose -f docker-compose.prod.yml up -d --build
+# preencha POSTGRES_*, DOMAIN, APP_IMAGE e APP_TAG (SHA da imagem publicada pelo CI)
+APP_TAG=<sha-do-commit> bash scripts/deploy.sh
 ```
+
+A app não publica portas: ela entra na rede externa `edge` e o Caddy a alcança em `amigo-app:8080`.
 
 ## Como o sorteio funciona
 
@@ -148,10 +150,11 @@ Ideias e riscos aceitos estão em [docs/IDEAS.md](docs/IDEAS.md).
 
 - [Especificação do projeto](<./Amigo Secreto — Especificação do Projeto.md>) — fonte da verdade de escopo, domínio e segurança.
 - [Plano de implementação](implementation.md) — blocos, estrutura e estado atual.
-- [Deploy](docs/DEPLOY.md) — VPS, Docker, Caddy, backup.
+- [Deploy](docs/DEPLOY.md) — VPS, Docker, registry, backup.
+- [Infra da VPS](docs/INFRA-VPS.md) — Caddy de borda, rede `edge` e múltiplas aplicações.
 - [Ideias e pendências](docs/IDEAS.md) — o que ficou para depois e riscos aceitos.
 - [E-mail com Brevo](docs/EMAIL-BREVO.md) — guia da fase 2: domínio, API, outbox e testes.
-- [Rate limiting](docs/RATE-LIMITING.md) — plano decidido para depois do deploy.
+- [Rate limiting](docs/RATE-LIMITING.md) — implementação, limites e validação no deploy.
 
 ## Testes
 

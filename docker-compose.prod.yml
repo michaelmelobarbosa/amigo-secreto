@@ -1,7 +1,9 @@
 name: amigo-secreto
 
-# Produção: apenas o Caddy publica portas no host.
-# Postgres e aplicação ficam restritos à rede interna do Compose.
+# Produção: dois containers neste projeto (app + Postgres).
+# O Caddy é um stack de borda separado (ver docs/INFRA-VPS.md): ele publica
+# 80/443, roteia por hostname e alcança esta app por amigo-app:8080 na rede
+# externa "edge". Nenhum container deste arquivo publica porta no host.
 
 services:
   db:
@@ -21,13 +23,17 @@ services:
       start_period: 30s
     networks:
       - internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Sem "ports": o banco só é alcançável pelos containers da rede interna.
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: amigo-secreto:latest
+    image: ${APP_IMAGE:?defina APP_IMAGE no .env (ex. ghcr.io/usuario/amigo-secreto)}:${APP_TAG:?defina APP_TAG no .env com o SHA da imagem}
+    pull_policy: always
+    container_name: amigo-app
     restart: unless-stopped
     init: true
     depends_on:
@@ -56,8 +62,10 @@ services:
       BREVO_SANDBOX: ${BREVO_SANDBOX:-false}
     expose:
       - "8080"
+    mem_limit: 1g
+    cpus: "1.0"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/actuator/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -66,32 +74,20 @@ services:
       - no-new-privileges:true
     networks:
       - internal
-    # Sem "ports": o app só é alcançável pelo Caddy.
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      DOMAIN: ${DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-    networks:
-      - internal
+      - edge
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Sem "ports": só o Caddy de borda publica 80/443 e alcança amigo-app:8080.
 
 networks:
   internal:
     driver: bridge
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-edge}
 
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:
