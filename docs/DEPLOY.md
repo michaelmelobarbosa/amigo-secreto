@@ -558,8 +558,11 @@ docker rm -f restore-test
 - **Tokens nas URLs.** Painel/participante/convite são acessados por link com token: **nunca
   habilite access log** no proxy (o `Caddyfile` não tem `log`) nem log de requisição na aplicação.
   O token está no *path*, não na query string — filtro de query não resolveria.
-- **Rate limiting.** Ainda não implementado. O plano está em [`RATE-LIMITING.md`](RATE-LIMITING.md)
-  e deve ser executado depois que este deploy estiver estável, antes de divulgar o link.
+- **Rate limiting.** Implementado em memória por IP (`POST /events`, `/join`, `draw`/`redraw` e
+  wishlist), com `429` + `Retry-After`. Os limites vêm de `RATE_LIMIT_*` no `.env`; sem elas valem
+  os padrões de [`RATE-LIMITING.md`](RATE-LIMITING.md). Depois do deploy, confirme que o Caddy
+  entrega o IP real e que um `X-Forwarded-For` forjado não engana o filtro **antes de divulgar o
+  link**.
 - **Actuator interno.** Só `health` é exposto (ver `application.yaml`), sem detalhes; o `Caddyfile`
   responde 404 para `/actuator/*` e o container não publica porta no host.
 - **Postgres sem porta pública.** Só o Caddy publica portas; `db` e `app` usam `expose`/rede interna.
@@ -667,4 +670,5 @@ Compose e o healthcheck foram escritos e revisados, mas **não executados**. Do 
 levantou o ambiente, mas nada deste projeto foi rodado lá ainda.
 
 No primeiro deploy, valide nesta ordem: `docker compose -f docker-compose.prod.yml config`,
-`pull`, `up -d`, `ps`/`logs`, HTTPS e a auditoria de portas. Só depois divulgue o link.
+`pull`, `up -d`, `ps`/`logs`, HTTPS e a auditoria de portas. Depois confirme que o rate limiting
+conta o IP real do cliente (e não o do Caddy) antes de divulgar o link. Só então divulgue.
