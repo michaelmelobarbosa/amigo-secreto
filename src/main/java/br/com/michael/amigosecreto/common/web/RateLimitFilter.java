@@ -1,0 +1,297 @@
+package br.com.michael.amigosecreto.common.web;
+
+import br.com.michael.amigosecreto.common.RateLimitProperties;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+/**
+ * Rate limiting em memória, por IP e categoria de rota (ver
+ * {@code docs/RATE-LIMITING.md}).
+ *
+ * <p>Roda depois do {@code ForwardedHeaderFilter} (que o Spring Boot registra em
+ * {@link Ordered#HIGHEST_PRECEDENCE}), então {@link HttpServletRequest#getRemoteAddr()}
+ * já contém o IP real do cliente que o Caddy encaminhou. O IP nunca é persistido
+ * nem registrado em log: existe apenas como chave do mapa em memória.
+ *
+ * <p>Janela fixa com contador por chave; o mapa é um LRU limitado por
+ * {@code max-keys}. Não é um mecanismo contra ataque distribuído — o objetivo é
+ * elevar o custo do abuso casual sem atrapalhar NAT compartilhado.
+ */
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
+public class RateLimitFilter extends OncePerRequestFilter {
+
+    private static final Pattern JOIN_PATH = Pattern.compile("^/join/[^/]+$");
+    private static final Pattern DRAW_PATH = Pattern.compile("^/admin/[^/]+/(?:draw|redraw)$");
+    private static final Pattern WISHLIST_PATH = Pattern.compile("^/p/[^/]+/wishlist$");
+
+    private static final String TOO_MANY_REQUESTS_BODY = """
+            <!doctype html>
+            <html lang="pt-BR">
+            <head>
+              <meta charset="utf-8">
+              <title>Muitas tentativas</title>
+            </head>
+            <body>
+              <h1>Muitas tentativas em pouco tempo</h1>
+              <p>Tente novamente em alguns minutos.</p>
+              <p><a href="/">Voltar ao início</a></p>
+            </body>
+            </html>
+            """;
+
+    private final RateLimitProperties properties;
+    private final Clock clock;
+    private final Map<String, Window> windows;
+
+    @Autowired
+    public RateLimitFilter(RateLimitProperties properties) {
+        this(properties, Clock.systemUTC());
+    }
+
+    RateLimitFilter(RateLimitProperties properties, Clock clock) {
+        this.properties = properties;
+        this.clock = clock;
+        this.windows = new LinkedHashMap<>(64, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Window> eldest) {
+                return size() > properties.maxKeys();
+            }
+        };
+    }
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
+
+        if (!properties.enabled() || !isLimitedMethod(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        Category category = categoryOf(pathOf(request));
+        if (category == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        Decision decision = register(category, normalizeIp(request.getRemoteAddr()));
+        if (decision.allowed()) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        tooManyRequests(response, decision.retryAfterSeconds());
+    }
+
+    private static boolean isLimitedMethod(String method) {
+        return "POST".equalsIgnoreCase(method);
+    }
+
+    private static String pathOf(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isEmpty() && path.startsWith(contextPath)) {
+            return path.substring(contextPath.length());
+        }
+        return path;
+    }
+
+    private static Category categoryOf(String path) {
+        if ("/events".equals(path)) {
+            return Category.EVENT_CREATE;
+        }
+        if (JOIN_PATH.matcher(path).matches()) {
+            return Category.JOIN;
+        }
+        if (DRAW_PATH.matcher(path).matches()) {
+            return Category.DRAW;
+        }
+        if (WISHLIST_PATH.matcher(path).matches()) {
+            return Category.WISHLIST;
+        }
+        return null;
+    }
+
+    private Decision register(Category category, String ip) {
+        if (ip == null) {
+            return Decision.permit();
+        }
+
+        long now = clock.millis();
+        long windowMillis = Math.max(1L, category.window(properties).toMillis());
+        int limit = category.limit(properties);
+        String key = category + "|" + ip;
+
+        synchronized (windows) {
+            Window window = windows.get(key);
+            if (window == null || now >= window.resetAt()) {
+                windows.put(key, new Window(1, now + windowMillis));
+                return Decision.permit();
+            }
+
+            window.increment();
+            if (window.count() <= limit) {
+                return Decision.permit();
+            }
+
+            long remainingMillis = Math.max(1L, window.resetAt() - now);
+            return Decision.deny((remainingMillis + 999L) / 1000L);
+        }
+    }
+
+    /**
+     * Normaliza o IP para a chave do balde. IPv4 usa o endereço completo; IPv6
+     * é reduzido ao prefixo /64 (primeiros quatro grupos), como decidido no
+     * plano, para reduzir a troca de endereço dentro do mesmo prefixo.
+     */
+    static String normalizeIp(String raw) {
+        if (raw == null) {
+            return "unknown";
+        }
+
+        String value = raw.trim();
+        if (value.isEmpty()) {
+            return "unknown";
+        }
+
+        if (value.charAt(0) == '[') {
+            int end = value.indexOf(']');
+            if (end > 0) {
+                value = value.substring(1, end);
+            }
+        }
+
+        if (value.indexOf(':') >= 0) {
+            int zone = value.indexOf('%');
+            if (zone >= 0) {
+                value = value.substring(0, zone);
+            }
+        }
+
+        String lower = value.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("::ffff:") && lower.indexOf('.') > 0) {
+            return lower.substring("::ffff:".length());
+        }
+        if (lower.indexOf(':') < 0) {
+            return lower;
+        }
+
+        try {
+            byte[] address = InetAddress.getByName(lower).getAddress();
+            if (address.length == 4) {
+                return dotted(address);
+            }
+            if (address.length == 16) {
+                StringBuilder prefix = new StringBuilder(19);
+                for (int i = 0; i < 8; i += 2) {
+                    if (i > 0) {
+                        prefix.append(':');
+                    }
+                    prefix.append(hex(address[i])).append(hex(address[i + 1]));
+                }
+                return prefix.toString();
+            }
+        } catch (UnknownHostException ignored) {
+            // Valor que não é um literal de IP: usa como veio para não abrir o balde.
+        }
+
+        return lower;
+    }
+
+    private static String dotted(byte[] address) {
+        return (address[0] & 0xff) + "."
+                + (address[1] & 0xff) + "."
+                + (address[2] & 0xff) + "."
+                + (address[3] & 0xff);
+    }
+
+    private static String hex(byte value) {
+        return Character.toString(Character.forDigit((value >> 4) & 0xf, 16))
+                + Character.toString(Character.forDigit(value & 0xf, 16));
+    }
+
+    private static void tooManyRequests(HttpServletResponse response, long retryAfterSeconds)
+            throws IOException {
+        response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+        response.setHeader("Retry-After", Long.toString(retryAfterSeconds));
+        response.setContentType("text/html;charset=UTF-8");
+        response.getWriter().write(TOO_MANY_REQUESTS_BODY);
+        response.getWriter().flush();
+    }
+
+    private enum Category {
+        EVENT_CREATE,
+        JOIN,
+        DRAW,
+        WISHLIST;
+
+        int limit(RateLimitProperties properties) {
+            return switch (this) {
+                case EVENT_CREATE -> properties.eventCreatePerWindow();
+                case JOIN -> properties.joinPerWindow();
+                case DRAW -> properties.drawPerWindow();
+                case WISHLIST -> properties.wishlistPerWindow();
+            };
+        }
+
+        Duration window(RateLimitProperties properties) {
+            return this == DRAW ? properties.drawWindow() : properties.window();
+        }
+    }
+
+    private static final class Window {
+
+        private int count;
+        private final long resetAt;
+
+        private Window(int count, long resetAt) {
+            this.count = count;
+            this.resetAt = resetAt;
+        }
+
+        private int count() {
+            return count;
+        }
+
+        private long resetAt() {
+            return resetAt;
+        }
+
+        private void increment() {
+            if (count < Integer.MAX_VALUE) {
+                count++;
+            }
+        }
+    }
+
+    private record Decision(boolean allowed, long retryAfterSeconds) {
+
+        private static Decision permit() {
+            return new Decision(true, 0);
+        }
+
+        private static Decision deny(long retryAfterSeconds) {
+            return new Decision(false, retryAfterSeconds);
+        }
+    }
+}

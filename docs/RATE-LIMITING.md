@@ -1,8 +1,8 @@
-# Rate limiting — plano para depois do deploy
+# Rate limiting — implementação e operação
 
-> **Status:** planejado, **não implementado**. Executar depois que o deploy real estiver estável e
-> **antes de divulgar o link publicamente**. Este documento é a decisão pronta para virar código;
-> não é urgente para uso local ou só com a família.
+> **Status:** **implementado em 2026-11-15**. O filtro, a configuração, a resposta 429 e os testes
+> estão no código. Falta apenas validar no deploy real que o Caddy entrega o IP do cliente e que
+> `X-Forwarded-For` forjado não engana o filtro; só depois disso divulgue o link publicamente.
 
 ## 1. Por que existe
 
@@ -74,16 +74,17 @@ não adiciona dependência.
 
 ## 4. Desenho técnico
 
-Arquivos previstos:
+Arquivos implementados:
 
-- `common/web/RateLimitFilter.java` — `OncePerRequestFilter`, ordem **depois** da extração de
-  forward headers, com as categorias e o mapa limitado.
+- `common/web/RateLimitFilter.java` — `OncePerRequestFilter` com ordem
+  `HIGHEST_PRECEDENCE + 10` (depois do `ForwardedHeaderFilter`, que o Spring Boot registra em
+  `HIGHEST_PRECEDENCE`), com as categorias e o mapa LRU limitado.
 - `common/RateLimitProperties.java` — `@ConfigurationProperties(prefix = "app.rate-limit")`:
   `enabled`, `eventCreatePerWindow`, `joinPerWindow`, `drawPerWindow`, `wishlistPerWindow`,
-  `window` (`Duration`), `maxKeys`.
-- `application.yaml` / `application-test.yaml` — defaults; testes desligam ou usam limites altos.
-- `templates/error/429.html` **ou** resposta direta no filtro (preferir direta para não depender do
-  `ErrorController`).
+  `window` (`Duration`), `drawWindow` e `maxKeys`.
+- `application.yaml` — defaults e placeholders `RATE_LIMIT_*`; `application-test.yaml` desliga o
+  filtro (os testes o montam diretamente com um `Clock` controlável).
+- Resposta `429` direta no filtro, com `Retry-After` em segundos e HTML mínimo sem token/IP.
 - `src/test/java/.../common/web/RateLimitFilterTest.java`.
 
 Fluxo:
@@ -148,14 +149,14 @@ debug temporário, sem IP) que o balde é o do cliente real.
 - IPv4, IPv6 e IPv6 mapeado (`::ffff:1.2.3.4`) são normalizados corretamente.
 - Mapa não cresce sem limite (teste unitário com `maxKeys` pequeno).
 - 429 não contém token, IP nem detalhe interno.
-- Suíte existente continua verde (139+ testes).
+- Suíte existente continua verde (159 testes).
 
-## 7. Checklist de execução (depois do deploy)
+## 7. Checklist de execução
 
 - [ ] Confirmar que o deploy real está estável e que o app não publica porta no host.
 - [ ] Confirmar que o Caddy entrega o IP real e que `X-Forwarded-For` forjado não engana o filtro.
-- [ ] Implementar propriedades, filtro, resposta 429 e testes.
-- [ ] Rodar a suíte completa.
+- [x] Implementar propriedades, filtro, resposta 429 e testes.
+- [x] Rodar a suíte completa.
 - [ ] Subir com limites padrão e testar de duas redes diferentes.
 - [ ] Verificar que criar 1 evento e entrar com 10 pessoas no mesmo Wi-Fi continua funcionando.
 - [ ] Só então divulgar o link publicamente.

@@ -1,5 +1,14 @@
 app:
   base-url: ${APP_BASE_URL:http://localhost:8080}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    event-create-per-window: ${RATE_LIMIT_EVENT_CREATE:5}
+    join-per-window: ${RATE_LIMIT_JOIN:30}
+    draw-per-window: ${RATE_LIMIT_DRAW:10}
+    wishlist-per-window: ${RATE_LIMIT_WISHLIST:30}
+    window: ${RATE_LIMIT_WINDOW:PT10M}
+    draw-window: ${RATE_LIMIT_DRAW_WINDOW:PT1H}
+    max-keys: ${RATE_LIMIT_MAX_KEYS:10000}
   email:
     enabled: ${EMAIL_ENABLED:false}
     from-email: ${BREVO_FROM_EMAIL:no-reply@mail.barbosalabs.dev}

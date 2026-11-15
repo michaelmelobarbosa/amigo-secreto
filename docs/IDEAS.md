@@ -4,7 +4,7 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 
 ## Segurança e operação
 
-- **Rate limiting** por IP em `/events`, `/join/{inviteCode}` e nas ações de sorteio. Hoje o teto de 100 e o lock protegem a integridade, mas não impedem spam de eventos nem alguém com o convite preencher as vagas. Plano pronto para executar **depois do deploy**: [`RATE-LIMITING.md`](RATE-LIMITING.md).
+- **Rate limiting (implementado em 2026-11-15):** por IP em `/events`, `/join/{inviteCode}`, sorteio e wishlist, em memória, com `429` + `Retry-After`. Falta validar o IP real atrás do Caddy no deploy. Limite diário, Redis e WAF continuam fora: [`RATE-LIMITING.md`](RATE-LIMITING.md).
 - **Hash dos tokens** no banco e links de uso único/expiração. O MVP guarda os tokens em claro porque o painel precisa copiá-los; mitigar exige mudar a UX de compartilhamento.
 - **Regenerar o token individual** de um participante (revogar um link que vazou). Hoje só o `inviteCode` é regenerável.
 - **Log de auditoria** para apagar evento, refazer/reabrir sorteio e regenerar convite, sem registrar tokens.
@@ -38,6 +38,6 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 - Token na URL: fica no histórico do navegador; `no-store`/`no-referrer` reduzem o vazamento, mas não apagam o histórico.
 - `Assignment` em claro: quem tem acesso direto ao banco pode ver quem tirou quem.
 - Sem login: o link é a credencial; quem tem o link vê o resultado.
-- Sem rate limiting: o convite é público e o teto é a principal defesa.
+- Rate limiting em memória é uma barreira contra abuso casual, não contra ataque distribuído; o teto de 100 e o lock continuam sendo a defesa de integridade.
 - Testes em H2: o comportamento de locks/tipos no Postgres só será provado no deploy/CI.
 - CSS próprio em vez de Pico.css: o layout é funcional, mas o guia visual não é o Pico.

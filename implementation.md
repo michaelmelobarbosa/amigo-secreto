@@ -26,11 +26,12 @@ Já implementado:
 - Fundação web: CSRF de sessão, `SecurityHeadersFilter`, `GlobalExceptionHandler`, `GlobalBindingAdvice`, `WebConfig`, layout/fragmentos, CSS e JS.
 - Templates `index`, `admin/dashboard`, `join/form`, `join/closed`, `participant/view`, erros 403/404/500.
 - Segurança: cookie `Secure` por padrão (perfil `dev` desativa), headers em todas as rotas dinâmicas, CSP sem inline, `robots.txt`, CSP/`data-confirm`, preview bots não marcam `firstViewedAt`.
+- Rate limiting em memória por IP e categoria: `POST /events` (5/10 min), `/join` (30/10 min), `draw`/`redraw` (10/h) e wishlist (30/10 min), com `429` + `Retry-After` e mapa LRU limitado.
 - E-mail (fase 2): `Participant.email`, tabela `notification`, `EmailSender`/`BrevoEmailSender`, `EmailContentBuilder`, listener de `DrawCompletedEvent` (nova transação pós-commit), worker com retry/idempotência e status/reenvio no painel.
 - Acesso do organizador: cartão de links com cópia, download em TXT e envio por e-mail sob demanda (`OrganizerLinksMailer`), sem persistir o endereço e sem virar login.
 - Deploy: `Dockerfile` multi-stage, `docker-compose.prod.yml` (app + Postgres + Caddy), `Caddyfile`, scripts de backup/restore, `docs/DEPLOY.md` (operação + decisões) e `docs/INFRA-VPS.md` (Caddy de borda e múltiplas apps).
 - Portfólio: `README.md`, `docs/IDEAS.md` e CI em `.github/workflows/ci.yml`.
-- Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox e e-mail (147 testes).
+- Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox, e-mail e rate limiting (159 testes).
 
 Ainda não existe: execução real na VPS.
 
@@ -52,6 +53,8 @@ Ainda não existe: execução real na VPS.
 
 **Bloco 8 (acesso do organizador) concluído:** cartão de links sempre visível no painel, download em TXT, envio dos três links por e-mail sob demanda, aviso de risco e confirmação ao sair da tela de criação sem copiar/baixar/enviar. O endereço digitado não é persistido. 147 testes verdes.
 
+**Bloco 9 (rate limiting) concluído:** `RateLimitFilter` em memória por IP e categoria, `RateLimitProperties` (`app.rate-limit`), resposta `429` com `Retry-After` e HTML mínimo, configuração por `RATE_LIMIT_*` no Compose de produção, teste no `application-test.yaml` e `RateLimitFilterTest`. Validação do IP real atrás do Caddy continua pendente do deploy.
+
 ---
 
 ## 1. Estrutura de pacotes
@@ -62,12 +65,14 @@ br.com.michael.amigosecreto
 ├── common/
 │   ├── TokenGenerator
 │   ├── LinkBuilder
+│   ├── RateLimitProperties              (@ConfigurationProperties: app.rate-limit)
 │   ├── config/
 │   │   ├── WebConfig                    (interceptors, resolvers, filtros)
 │   │   └── AppProperties                (@ConfigurationProperties: app.base-url)
 │   └── web/
 │       ├── CsrfTokenManager
 │       ├── CsrfTokenInterceptor
+│       ├── RateLimitFilter              (OncePerRequestFilter: 429 por IP/categoria)
 │       ├── SecurityHeadersFilter        (OncePerRequestFilter)
 │       └── GlobalExceptionHandler       (@ControllerAdvice)
 ├── event/
@@ -376,6 +381,23 @@ Sem Spring Security, `th:action` **não** injeta `_csrf`. Implementar:
 - `X-Robots-Tag: noindex, nofollow`
 - `robots.txt` bloqueando tudo
 
+### Rate limiting
+
+`RateLimitFilter` (`OncePerRequestFilter`, ordem `HIGHEST_PRECEDENCE + 10`, depois do
+`ForwardedHeaderFilter`) limita apenas `POST`, por IP e categoria:
+
+| Rota | Categoria | Limite |
+| --- | --- | --- |
+| `POST /events` | `event-create` | 5 por 10 min |
+| `POST /join/{inviteCode}` | `join` | 30 por 10 min |
+| `POST /admin/{adminToken}/draw` e `/redraw` | `draw` | 10 por hora |
+| `POST /p/{accessToken}/wishlist` | `wishlist` | 30 por 10 min |
+
+Janela fixa com contador por chave, mapa LRU limitado por `max-keys` (10.000) e IP apenas em
+memória (nunca persistido ou logado). Resposta `429` com `Retry-After` e HTML mínimo, sem token ou
+IP. IPv4 mapeado é normalizado e IPv6 usa o prefixo /64. Configuração em `app.rate-limit`
+(`RATE_LIMIT_*`). Plano e justificativas: [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
+
 ### Tratamento de erros
 
 `GlobalExceptionHandler` (`@ControllerAdvice`):
@@ -476,6 +498,9 @@ Remover/ajustar:
 - `TokenGenerator`: formato, prefixos, unicidade.
 - `LinkBuilder`: URL absoluta, base sem barra final, encoding do WhatsApp.
 - `DrawService` com mocks: estados, teto, evento publicado, tradução das exceções.
+- `RateLimitFilter`: limite por janela, baldes por IP e categoria, janela de 1 hora do sorteio,
+  reset após expirar, IPv4 mapeado/IPv6 `/64`, mapa limitado, `enabled=false` e resposta 429 sem
+  vazar IP/token.
 
 ### Serviço e repositório (Flyway + H2/Testcontainers)
 
@@ -539,6 +564,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 10. [x] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso e backup (arquivos prontos; execução na VPS pendente).
 11. [x] **Portfólio:** README, `docs/IDEAS.md` e CI.
 12. [x] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega. Guia: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
+13. [x] **Rate limiting:** filtro em memória por IP/categoria, `app.rate-limit`, resposta 429 e testes. Plano: [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 
 ---
 
@@ -568,8 +594,9 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [x] Página do participante mostrando apenas o próprio resultado e permitindo editar wishlist.
 - [x] Painel nunca expõe quem tirou quem.
 - [x] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
+- [x] Rate limiting em memória por IP nas rotas de criação, convite, sorteio e wishlist (validação do IP real atrás do Caddy fica para o deploy).
 - [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate` (H2 validado; Postgres pendente no deploy).
-- [x] Testes unitários, de serviço e de integração passando (147 testes).
+- [x] Testes unitários, de serviço e de integração passando (159 testes).
 - [ ] Deploy Docker/Compose funcional na VPS (arquivos prontos; falta executar build, certificado e restore).
 
 ---
@@ -578,7 +605,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 
 O que ficou conscientemente fora do MVP está detalhado em [`docs/IDEAS.md`](docs/IDEAS.md). Resumo:
 
-- **Rate limiting** em `/events`, `/join` e sorteio; o teto de 100 e o lock protegem a integridade, não o abuso. Plano decidido em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md), para executar depois do deploy.
+- **Rate limiting** implementado em memória por IP (5/10 min em `/events`, 30/10 min em `/join`, 10/h no sorteio e 30/10 min na wishlist); falta apenas validar no deploy que o Caddy entrega o IP real. Limite diário/Redis/WAF ficam fora do escopo. Ver [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - **Dashboard em uma transação só**: leituras separadas podem mostrar estado misto por um instante.
 - **Postgres no CI/Testcontainers**: a suíte atual roda em H2; locks/tipos só serão provados no banco real.
 - **Testes de concorrência** (draw × draw, última vaga, rollback de redraw/reopen).

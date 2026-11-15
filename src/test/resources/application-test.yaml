@@ -21,6 +21,10 @@ server:
 
 app:
   base-url: http://localhost:8080
+  # Os testes não exercitam o filtro pelo contexto web; o RateLimitFilterTest
+  # monta o filtro diretamente com um Clock controlável.
+  rate-limit:
+    enabled: false
   email:
     enabled: false
     worker-enabled: false
