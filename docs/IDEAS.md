@@ -25,7 +25,7 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 
 - **Fase 2 — e-mail (implementada):** link individual por e-mail, opcional, sem virar login. Brevo no plano grátis, subdomínio `mail.barbosalabs.dev` com DKIM/DMARC, outbox assíncrono, retentativas e status/reenvio no painel. Pendente apenas habilitar no `.env` da VPS. Guia completo em [`docs/EMAIL-BREVO.md`](EMAIL-BREVO.md).
 - **Telefone/WhatsApp:** WhatsApp Cloud API é paga para mensagens utility iniciadas pelo negócio; SMS é pago; Telegram é grátis mas exige que cada pessoa inicie o bot. O MVP mantém o `wa.me` manual.
-- **Recuperação de link por e-mail** e double opt-in, se o e-mail virar canal principal.
+- **Recuperação automática de link** (conta/login do organizador) e double opt-in, se o e-mail virar canal principal. Hoje existe apenas o envio avulso dos links para um endereço digitado no painel.
 - **Organizador pode optar por não participar do sorteio.** Hoje ele sempre participa.
 - **Expiração automática de eventos antigos** e limpeza de dados pessoais.
 - **Permutação com reciprocidade permitida** (múltiplos ciclos) como opção do evento, além do ciclo único.

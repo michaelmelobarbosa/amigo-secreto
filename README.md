@@ -2,11 +2,11 @@
 
 Aplicação web para organizar amigo secreto **sem login**, com acesso por links que carregam tokens. Serve para uso real (família e trabalho) e como projeto de portfólio, com deploy em VPS própria.
 
-> **Status:** MVP funcional com e-mail na fase 2. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica e envio do link por Brevo implementados. **139 testes** passando.
+> **Status:** MVP funcional com e-mail na fase 2. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica e envio do link por Brevo implementados. **147 testes** passando.
 
 ## Funcionalidades
 
-- Criar evento e receber três links: painel do organizador, página do organizador como participante e convite.
+- Criar evento e receber três links: painel do organizador, página do organizador como participante e convite, com cópia, download em TXT e envio por e-mail sob demanda.
 - Entrada por convite público (`/join/{inviteCode}`) ou adição manual pelo painel.
 - Teto de 100 participantes, com lock no evento para não furar o limite em concorrência.
 - Wishlist por participante, editável antes e depois do sorteio.
@@ -51,10 +51,14 @@ Pré-requisitos: **JDK 25** e **Docker** (para o Postgres). No Windows, use `.\m
 2. Rode a aplicação com o perfil `dev` (cookie sem `Secure`, pois é HTTP local):
 
    ```powershell
-   .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
+   $env:SPRING_PROFILES_ACTIVE="dev"
+   .\mvnw.cmd spring-boot:run
    ```
 
    Acesse `http://localhost:8080`.
+
+   > No PowerShell, evite passar `-Dspring-boot.run.profiles=dev` sem aspas: ele pode ser
+   > interpretado como duas opções. A variável de ambiente acima é mais simples e não depende disso.
 
 3. Testes (H2 em memória, sem Docker):
 
@@ -82,7 +86,8 @@ $env:BREVO_FROM_NAME="Amigo Secreto"
 $env:BREVO_SANDBOX="true"   # valida sem entregar; use false para envio real
 $env:EMAIL_WORKER_ENABLED="true"
 
-.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
+$env:SPRING_PROFILES_ACTIVE="dev"
+.\mvnw.cmd spring-boot:run
 ```
 
 Em produção, o `docker-compose.prod.yml` passa essas variáveis a partir do `.env` do servidor. Guia completo: [docs/EMAIL-BREVO.md](docs/EMAIL-BREVO.md).
@@ -128,7 +133,7 @@ A direção é controller → service → repository. Entidades JPA não viram m
 
 ## Decisões e trade-offs
 
-- **Sem login** mantém o produto simples e o link é a credencial. Em troca, quem tem o link vê o resultado e o histórico do navegador guarda a URL.
+- **Sem login** mantém o produto simples e o link é a credencial. Em troca, quem tem o link vê o resultado e o histórico do navegador guarda a URL. O painel oferece cópia, download em TXT e envio dos links por e-mail, mas não há recuperação automática se tudo for perdido.
 - **Spring Boot** foi escolhido por relevância profissional; o projeto evita recursos que não precisa (sem Security, sem SPA).
 - **Ciclo único** é fácil de explicar e garante que não há troca direta; o custo é a busca mais restrita que uma permutação genérica.
 - **Restrições rígidas** em vez de pesos: casais nunca se tiram.
@@ -149,7 +154,7 @@ Ideias e riscos aceitos estão em [docs/IDEAS.md](docs/IDEAS.md).
 
 ## Testes
 
-A suíte cobre o solver (incluindo o caso de 16 participantes em dois grupos de 8), entidades/repositórios, serviços transacionais, CSRF, headers, 404, IDOR, XSS, fluxo de convite, sorteio/refazer/reabrir, página do participante, adaptador Brevo, outbox, retry/reenvio e e-mail no fluxo web.
+A suíte cobre o solver (incluindo o caso de 16 participantes em dois grupos de 8), entidades/repositórios, serviços transacionais, CSRF, headers, 404, IDOR, XSS, fluxo de convite, sorteio/refazer/reabrir, página do participante, adaptador Brevo, outbox, retry/reenvio, e-mail no fluxo web e download/envio dos links do organizador.
 
 ```bash
 ./mvnw test
