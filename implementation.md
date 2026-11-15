@@ -29,11 +29,11 @@ Já implementado:
 - Rate limiting em memória por IP e categoria: `POST /events` (5/10 min), `/join` (30/10 min), `draw`/`redraw` (10/h) e wishlist (30/10 min), com `429` + `Retry-After` e mapa LRU limitado.
 - E-mail (fase 2): `Participant.email`, tabela `notification`, `EmailSender`/`BrevoEmailSender`, `EmailContentBuilder`, listener de `DrawCompletedEvent` (nova transação pós-commit), worker com retry/idempotência e status/reenvio no painel.
 - Acesso do organizador: cartão de links com cópia, download em TXT e envio por e-mail sob demanda (`OrganizerLinksMailer`), sem persistir o endereço e sem virar login.
-- Deploy: `Dockerfile` multi-stage, `docker-compose.prod.yml` (app + Postgres + Caddy), `Caddyfile`, scripts de backup/restore, `docs/DEPLOY.md` (operação + decisões) e `docs/INFRA-VPS.md` (Caddy de borda e múltiplas apps).
+- Deploy: `Dockerfile` multi-stage sem QEMU (build nativo + runtime copiado), `docker-compose.prod.yml` (app + Postgres, imagem do GHCR com tag SHA, `mem_limit`/`cpus` e logging), Caddy de borda externo, `scripts/deploy.sh`, scripts de backup/restore, `docs/DEPLOY.md` (operação + decisões) e `docs/INFRA-VPS.md` (stack de borda e múltiplas apps).
 - Portfólio: `README.md`, `docs/IDEAS.md` e CI em `.github/workflows/ci.yml`.
 - Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox, e-mail e rate limiting (159 testes).
 
-Ainda não existe: execução real na VPS.
+Ainda não existe: execução real na VPS (DNS, rede `edge`, stack de borda, imagem no GHCR e primeiro deploy).
 
 **Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. O Compose ainda não foi executado porque o Docker não está instalado nesta máquina.
 
@@ -47,13 +47,15 @@ Ainda não existe: execução real na VPS.
 
 **Bloco 5 (segurança + consistência) concluído:** auditorias de segurança e de JPA, cookie `Secure` por padrão, headers em redirects, CSP + `data-confirm`, `robots.txt`, página 500, escopo da wishlist, nomes duplicados case-insensitive, preview bots, limpeza de grupos degenerados e testes de segurança (106 testes).
 
-**Bloco 6 (deploy + portfólio) concluído em arquivos:** Dockerfile multi-stage, Compose de produção, Caddy/HTTPS, backup/restore, `docs/DEPLOY.md`, `docs/INFRA-VPS.md`, README, `docs/IDEAS.md` e CI. O ambiente da VPS foi levantado pelo agente Hermes (ARM64, 2 vCPU, 11 GB de RAM, 29 GB livres, Docker não instalado, portas 8080/9119/9120 ocupadas pelo próprio Hermes) e está registrado em `docs/DEPLOY.md`. A execução real continua pendente, e o documento lista as pendências de código P1–P7 a aplicar antes do primeiro deploy (bind do Postgres de dev, limites de memória/log, build ARM64 fora da VPS, imagem de registry).
+**Bloco 6 (deploy + portfólio) concluído:** Dockerfile multi-stage, Compose de produção, Caddy/HTTPS, backup/restore, `docs/DEPLOY.md`, `docs/INFRA-VPS.md`, README, `docs/IDEAS.md` e CI. O ambiente da VPS foi levantado pelo agente Hermes (ARM64, 2 vCPU, 11 GB de RAM, 29 GB livres, Docker não instalado, portas 8080/9119/9120 ocupadas pelo próprio Hermes) e está registrado em `docs/DEPLOY.md`. A execução real continua pendente. As pendências P1–P6 foram aplicadas no Bloco 10.
 
 **Bloco 7 (e-mail / Brevo) concluído:** conta e domínio `mail.barbosalabs.dev` autenticados, sender e API key validados, envio real testado; migrações V2/V3, outbox `notification`, `BrevoEmailSender`, listener pós-commit, worker com retry/idempotência, templates HTML/texto, e-mail opcional no join/adição manual e status/reenvio no painel. 139 testes verdes na entrega.
 
 **Bloco 8 (acesso do organizador) concluído:** cartão de links sempre visível no painel, download em TXT, envio dos três links por e-mail sob demanda, aviso de risco e confirmação ao sair da tela de criação sem copiar/baixar/enviar. O endereço digitado não é persistido. 147 testes verdes.
 
 **Bloco 9 (rate limiting) concluído:** `RateLimitFilter` em memória por IP e categoria, `RateLimitProperties` (`app.rate-limit`), resposta `429` com `Retry-After` e HTML mínimo, configuração por `RATE_LIMIT_*` no Compose de produção, teste no `application-test.yaml` e `RateLimitFilterTest`. Validação do IP real atrás do Caddy continua pendente do deploy.
+
+**Bloco 10 (deploy aplicável) concluído:** P1–P6 aplicadas (Postgres de dev em loopback, `mem_limit`/`cpus`, rotação de log, platform args, CI publica ARM64 no GHCR e Compose usa `APP_IMAGE:APP_TAG`). O Caddy foi desacoplado: o Compose do projeto tem só `app` + `db`, a app entra na rede externa `edge` como `amigo-app`, e o stack de borda vive em [`docs/INFRA-VPS.md`](docs/INFRA-VPS.md). Adicionados `scripts/deploy.sh`, `.env.prod.example` com imagem/tag/rede e a imagem de runtime sem `curl` (BusyBox estático para o HEALTHCHECK). O build ARM64 não usa QEMU.
 
 ---
 
@@ -561,10 +563,11 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 7. [x] **Página do participante:** resultado, wishlist, primeira visualização, aviso de sorteio refeito.
 8. [x] **Acabamento:** CSS próprio, mensagens de erro, estados vazios e página 500.
 9. [x] **Segurança:** headers em todas as rotas dinâmicas, 404 para tokens inválidos, CSRF, CSP, robots e testes de privacidade.
-10. [x] **Deploy:** Dockerfile multi-stage, Compose de produção, proxy reverso e backup (arquivos prontos; execução na VPS pendente).
+10. [x] **Deploy:** Dockerfile multi-stage sem QEMU, Compose app + db com imagem ARM64 do GHCR e tag SHA, Caddy de borda externo, `scripts/deploy.sh` e backup (execução na VPS pendente).
 11. [x] **Portfólio:** README, `docs/IDEAS.md` e CI.
 12. [x] **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega. Guia: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
 13. [x] **Rate limiting:** filtro em memória por IP/categoria, `app.rate-limit`, resposta 429 e testes. Plano: [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
+14. [x] **Deploy aplicável:** P1–P6, Caddy de borda fora do repositório, CI publicando ARM64 no GHCR, `scripts/deploy.sh` e `.env.prod.example` atualizado.
 
 ---
 
@@ -597,7 +600,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [x] Rate limiting em memória por IP nas rotas de criação, convite, sorteio e wishlist (validação do IP real atrás do Caddy fica para o deploy).
 - [ ] Flyway aplicando a V1 do zero em banco vazio, com `ddl-auto=validate` (H2 validado; Postgres pendente no deploy).
 - [x] Testes unitários, de serviço e de integração passando (159 testes).
-- [ ] Deploy Docker/Compose funcional na VPS (arquivos prontos; falta executar build, certificado e restore).
+- [ ] Deploy Docker/Compose funcional na VPS (imagem ARM64 publicada e arquivos prontos; falta DNS, rede `edge`, stack de borda, `.env` e executar o deploy).
 
 ---
 
@@ -613,4 +616,4 @@ O que ficou conscientemente fora do MVP está detalhado em [`docs/IDEAS.md`](doc
 - **Tokens na URL**: histórico do navegador; `no-store`/`no-referrer` mitigam, não apagam.
 - **E-mail:** dedupe por endereço (melhor esforço sem verificação) ainda não foi implementado; telefone/WhatsApp API/SMS ficam fora.
 - **CSS próprio** em vez de Pico.css; Pico/HTMX continuam opcionais.
-- **Execução real do deploy** (build, certificado, backup/restore) na VPS.
+- **Execução real do deploy** (DNS, rede `edge`, stack de borda, imagem no GHCR, certificado e restore) na VPS.

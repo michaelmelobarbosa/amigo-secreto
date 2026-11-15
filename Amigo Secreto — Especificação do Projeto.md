@@ -31,7 +31,7 @@ Aplicação web para organizar amigo secreto, sem login, com acesso por links co
 | Wishlist | Texto livre por participante, no MVP, editável antes e depois do sorteio |
 | Banco | PostgreSQL em dev e produção (Docker Compose). H2 apenas nos testes |
 | Migrações | Flyway desde a V1; `spring.jpa.hibernate.ddl-auto=validate`. Não usar `update` no schema real (seção 8) |
-| Deploy | Dockerfile multi-stage + Docker Compose (app + Postgres) na VPS, com proxy reverso (Caddy ou Nginx) |
+| Deploy | Dockerfile multi-stage + Docker Compose (app + Postgres) na VPS, com Caddy em stack de borda compartilhado |
 | Domínio e HTTPS | Ficam para depois do MVP, mas são pré-requisito da fase 2 de e-mail e de qualquer uso real na internet |
 | Organização do código | Pacotes por funcionalidade |
 
@@ -336,7 +336,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 ## 10. Deploy na VPS
 
 1. `Dockerfile` multi-stage: build com Maven/JDK, runtime com JRE enxuto, usuário não root.
-2. `docker-compose.yml`: serviços `app` e `db` (Postgres com volume persistente), mais o proxy reverso (Caddy ou Nginx) com HTTPS automático (Let's Encrypt).
+2. `docker-compose.yml` de produção: serviços `app` e `db` (Postgres com volume persistente). O **Caddy** vive em um stack de borda separado, compartilhado com outras aplicações, e publica 80/443 com HTTPS automático (Let's Encrypt); a app não publica portas e entra na rede externa `edge` como `amigo-app`.
 3. Configuração por variáveis de ambiente (`SPRING_DATASOURCE_URL`, usuário, senha, `APP_BASE_URL`) em arquivo `.env` fora do Git.
 4. Backup periódico do volume do Postgres (`pg_dump` agendado).
 5. Endpoint de saúde (`/actuator/health`), se adicionar o Actuator, usado pelo healthcheck do Compose.
@@ -388,6 +388,7 @@ Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados 
 - 2026-11-14: rate limiting por IP decidido para **depois do deploy**, com filtro em memória, janela fixa, sem dependência nova e limites generosos; plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - 2026-11-14: mitigação da perda do link do painel: cartão de links com cópia, download em TXT e envio por e-mail sob demanda, mais aviso ao sair sem guardar. Não é login nem recuperação automática; a conta de organizador continua como fase futura.
 - 2026-11-15: rate limiting em memória implementado: `OncePerRequestFilter` por IP/categoria, janela fixa, mapa LRU, `429` + `Retry-After` e janela própria de 1 hora para sorteio. Falta validar o IP real atrás do Caddy no deploy.
+- 2026-11-15: deploy endurecido: Postgres de dev em loopback, `mem_limit`/`cpus`, rotação de log, build ARM64 sem QEMU, imagem imutável no GHCR e Caddy desacoplado para um stack de borda externo (rede `edge`).
 
 ## 15. Fase 2 — e-mail (implementado)
 

@@ -1,3 +1,9 @@
+name: amigo-secreto-dev
+
+# Postgres de desenvolvimento. Este arquivo nunca deve ser usado na VPS:
+# ele publica a porta do banco (em loopback) e não tem os limites de produção.
+# Use sempre docker-compose.prod.yml no servidor.
+
 services:
   db:
     image: postgres:17-alpine
@@ -6,7 +12,8 @@ services:
       POSTGRES_USER: amigo
       POSTGRES_PASSWORD: amigo
     ports:
-      - "5432:5432"
+      # Apenas loopback: outros hosts da rede não alcançam o banco de dev.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
