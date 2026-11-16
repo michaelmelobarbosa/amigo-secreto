@@ -26,10 +26,9 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 - **Dashboard em uma transação só:** hoje evento, participantes e grupos são lidos em transações separadas; numa corrida exata a tela pode mostrar estado misturado por um instante. Um `DashboardQuery` com `@Transactional(readOnly = true)` resolve.
 - **Postgres nos testes:** a suíte roda em H2 `MODE=PostgreSQL`. Falta um job de CI com Postgres/Testcontainers para validar locks, tipos e `ddl-auto=validate` no banco real.
 - **Testes de concorrência:** dois `draw` simultâneos, duas inscrições na última vaga, rollback do redraw/reopen, `firstViewedAt` concorrente.
-- **P9/P10/P11 aplicadas em 2026-11-15:** `db` com `mem_limit: 512m`/`cpus: "0.5"`, exemplos de
-  `.env` com `BREVO_FROM_NAME="Amigo Secreto"` e sessão só por cookie (sem `;jsessionid`).
-- **P12 — Caddy de borda:** o template tem `mem_limit: 256m`; falta aplicar no
-  `/opt/edge/compose.yml` da VPS.
+- **P9–P12 aplicadas:** `db` com `mem_limit: 512m`/`cpus: "0.5"`, exemplos de `.env` com
+  `BREVO_FROM_NAME="Amigo Secreto"`, sessão só por cookie (sem `;jsessionid`) e Caddy com
+  `mem_limit: 256m` aplicado e verificado no runtime em 2026-11-16.
 - **Paginação/histórico:** o painel carrega todos os participantes (máximo 100), o que é suficiente no MVP.
 
 ## Produto

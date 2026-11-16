@@ -787,19 +787,18 @@ O que continua **fora do repositório** está na seção
 ### Pendências abertas após o deploy
 
 Estas foram encontradas na execução real. **P9–P11 foram aplicadas em 2026-11-15**; P12 foi
-incluída no template do stack de borda e depende de aplicação no `/opt/edge/compose.yml` da VPS.
-P13 foi implementada no código em 2026-11-16 (rate limit dos endpoints de e-mail); P14 (SPF) foi
-aplicada no mesmo dia; P15 é operacional.
+aplicada e verificada na VPS em 2026-11-16; P13 foi implementada no código em 2026-11-16 (rate limit
+dos endpoints de e-mail); P14 (SPF) foi aplicada no mesmo dia; P15 é operacional.
 
 | # | Pendência | Onde | Estado / ação |
 | --- | --- | --- | --- |
 | **P9** | `db` sem limite de memória | `docker-compose.prod.yml` | **aplicado**: `mem_limit: 512m` + `cpus: "0.5"` |
 | **P10** | `.env.example`/`.env.prod.example` quebram `source .env` | ambos | **aplicado**: `BREVO_FROM_NAME="Amigo Secreto"` nos dois; `deploy.sh` valida o `.env` |
 | **P11** | `;jsessionid` na URL quando não há cookie | `application.yaml` | **aplicado**: `tracking-modes: cookie` + `SessionTrackingIntegrationTest` |
-| **P12** | Caddy de borda sem `mem_limit` | `/opt/edge/compose.yml` (externo) | **template atualizado** com `256m`; falta aplicar na VPS |
+| **P12** | Caddy de borda sem `mem_limit` | `/opt/edge/compose.yml` (externo) | **aplicado e verificado em 2026-11-16**: `mem_limit: 256m`, `HostConfig.Memory=268435456`, config-hash igual e `up -d --dry-run` sem mudanças |
 | **P13** | Endpoints de e-mail sem rate limit | `common/web/RateLimitFilter` | **implementado no código em 2026-11-16**: `links/email` 10/h e `email/resend` 20/h, janela própria e testes; entra em produção com P15 |
 | **P14** | SPF ausente no subdomínio de envio | DNS de `mail.barbosalabs.dev` | **aplicado em 2026-11-16**: TXT `v=spf1 include:spf.sendinblue.com -all`, verificado no DNS público |
-| **P15** | VPS no commit `2b6e2d4`; remoto em `26bd7f4` | deploy | quando o CI publicar a imagem do novo SHA, `APP_TAG=<sha> bash scripts/deploy.sh` |
+| **P15** | VPS no commit `2b6e2d4`; imagem do commit novo não publicada | deploy | quando o CI publicar a imagem do novo SHA, `APP_TAG=<sha> bash scripts/deploy.sh` |
 
 Detalhes e reprodução em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §8.
 
@@ -882,10 +881,16 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 - **Desvio consciente:** o site usa **hostname literal** em vez de `{$DOMAIN}`; um `.env` por stack
   não escala para N apps. Nova app = novo arquivo em `sites/` + `caddy reload`.
 - O Caddy é o único a publicar 80/443 e é ponto único de falha para todas as apps da VPS.
-- O template do stack já traz `mem_limit: 256m`; confirme o mesmo no `/opt/edge/compose.yml` da VPS
-  (P12) e recrie o Caddy:
+- **Estado verificado em 2026-11-16 (P12):** o Caddy está limitado a `256m`
+  (`HostConfig.Memory=268435456`), o config-hash do container é idêntico ao do Compose e
+  `up -d --dry-run` não recria nada. Consumo: ~11,5 MiB de 256 MiB.
+- Para auditar (o `config` sozinho mostra a intenção; o `--dry-run`/config-hash mostra se o
+  container em execução reflete o arquivo):
   ```bash
-  cd /opt/edge && sudo docker compose -f compose.yml up -d caddy
+  cd /opt/edge
+  docker compose -f compose.yml config | grep mem_limit
+  docker inspect edge-caddy-1 --format '{{.HostConfig.Memory}}'
+  docker compose -f compose.yml up -d --dry-run
   ```
 
 ### 4. GitHub Container Registry (GHCR) (feito)
@@ -934,8 +939,7 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
   `DOCKER-USER` no topo, HTTPS 200 e `systemctl list-timers`.
 - Criar um evento real de teste pelo navegador e apagar depois (o fluxo HTTP já foi exercitado).
 - Configurar monitoração externa (ex.: Uptime Kuma/healthchecks.io) apontando para `/`.
-- Aplicar `mem_limit: 256m` no Caddy do `/opt/edge/compose.yml` (P12) e recriar o serviço.
-- Quando o CI publicar a imagem do commit novo (`26bd7f4` ou posterior), rodar
+- Quando o CI publicar a imagem do commit novo, rodar
   `APP_TAG=<sha> bash scripts/deploy.sh` (P15).
 - `git fetch --unshallow` se precisar de histórico/rollback por commit.
 - `docker rmi hello-world alpine:3.20` para limpar as imagens de teste.
@@ -957,8 +961,8 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | Deploy automatizado (CD) | ❌ | opcional |
 | Atualização de imagens base | ❌ | `docker compose pull` periódico; avaliar fixar digest |
 
-**Pendências de código/configuração:** P9–P11 aplicadas; P12 (Caddy `mem_limit`) está no template
-externo; P13 (rate limit dos endpoints de e-mail) foi implementado no código e P14 (SPF) foi aplicada
-em 2026-11-16; P15 é o deploy da imagem do commit novo. A suíte de **164 testes** e os testes de
-produção de 2026-11-15/16 cobrem o fluxo funcional em nível de aplicação, mas não substituem o teste
-no navegador.
+**Pendências de código/configuração:** P9–P11 aplicadas; P12 (Caddy `mem_limit`) aplicada e verificada
+na VPS em 2026-11-16; P13 (rate limit dos endpoints de e-mail) foi implementado no código e P14 (SPF)
+foi aplicada em 2026-11-16; P15 é o deploy da imagem do commit novo. A suíte de **164 testes** e os
+testes de produção de 2026-11-15/16 cobrem o fluxo funcional em nível de aplicação, mas não substituem
+o teste no navegador.
