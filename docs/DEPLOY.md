@@ -43,8 +43,8 @@ Caddy, em um stack separado, fica exposto.
   Let's Encrypt, Flyway V1–V3 aplicado em Postgres 17 e backup diário por systemd timer. Registro
   completo em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 - **E-mail real ativo e validado em 2026-11-16:** 2 notificações `SENT`, `attempts=1`, painel
-  **Enviado**, zero erro/retentativa; chave de produção restrita a envio. SPF e rate limit dos
-  endpoints de e-mail ainda pendentes.
+  **Enviado**, zero erro/retentativa; chave de produção restrita a envio. SPF publicado; rate limit
+  dos endpoints de e-mail no código (`links/email` 10/h, `email/resend` 20/h), entra com P15.
 - **Dois containers neste projeto**: `db` (Postgres 17) e `app` (Spring Boot). O Caddy é um
   **stack de borda separado**, compartilhado com outras aplicações da VPS; o porquê está em
   [Decisões](#decisões-de-arquitetura-com-justificativa) e em [`INFRA-VPS.md`](./INFRA-VPS.md).
@@ -576,9 +576,8 @@ TEST_EMAIL=seu@email.com bash scripts/smoke-email.sh
 O primeiro não passa pela aplicação; o segundo usa o mesmo `EmailSender` do painel. O fluxo completo
 com outbox/worker é o sorteio acima.
 
-> Os scripts `check-brevo.sh` e `smoke-email.sh` estão no working tree e precisam entrar no próximo
-> commit. No teste de 2026-11-16 eles ainda não estavam no remoto, então o Hermes fez o equivalente
-> via API/UI.
+> Os scripts `check-brevo.sh` e `smoke-email.sh` foram adicionados ao repositório. No teste de
+> 2026-11-16 eles ainda não estavam no remoto, então o Hermes fez o equivalente via API/UI.
 
 > A cota do plano grátis é 300 e-mails/dia. Um evento de 100 participantes com um refazer gera 200
 > envios; dois refazeres no mesmo dia estouram a cota. O worker tenta de novo depois, mas o provedor
@@ -708,8 +707,8 @@ docker rm -f restore-test
   cinco primeiros `POST /events` passaram, o sexto retornou `429` com `Retry-After: 600`, e
   `X-Forwarded-For` forjado (`9.9.9.9`, `8.8.4.4`) não criou bucket novo.
 - **E-mail real ativo:** `POST /admin/{token}/links/email` e
-  `POST /admin/{token}/participants/{id}/email/resend` ainda **não** têm rate limit (P13). Com a
-  cota de 300/dia, esses endpoints podem esgotar o Brevo e a reputação do domínio.
+  `POST /admin/{token}/participants/{id}/email/resend` têm rate limit no código (10/h e 20/h, janela
+  de 1h), que entra em produção com P15. A cota do Brevo é 300/dia.
 - **`ubuntu` no grupo `docker` = root equivalente.** O acesso ao socket do Docker permite controlar
   todos os containers. Aceito para operação single-tenant.
 - **HSTS com `includeSubDomains`** está ativo: subdomínios de `amigo-secreto.barbosalabs.dev` ficam
@@ -789,7 +788,8 @@ O que continua **fora do repositório** está na seção
 
 Estas foram encontradas na execução real. **P9–P11 foram aplicadas em 2026-11-15**; P12 foi
 incluída no template do stack de borda e depende de aplicação no `/opt/edge/compose.yml` da VPS.
-P13/P14 surgiram com o e-mail ativo em 2026-11-16; P15 é operacional.
+P13 foi implementada no código em 2026-11-16 (rate limit dos endpoints de e-mail); P14 (SPF) foi
+aplicada no mesmo dia; P15 é operacional.
 
 | # | Pendência | Onde | Estado / ação |
 | --- | --- | --- | --- |
@@ -797,8 +797,8 @@ P13/P14 surgiram com o e-mail ativo em 2026-11-16; P15 é operacional.
 | **P10** | `.env.example`/`.env.prod.example` quebram `source .env` | ambos | **aplicado**: `BREVO_FROM_NAME="Amigo Secreto"` nos dois; `deploy.sh` valida o `.env` |
 | **P11** | `;jsessionid` na URL quando não há cookie | `application.yaml` | **aplicado**: `tracking-modes: cookie` + `SessionTrackingIntegrationTest` |
 | **P12** | Caddy de borda sem `mem_limit` | `/opt/edge/compose.yml` (externo) | **template atualizado** com `256m`; falta aplicar na VPS |
-| **P13** | Endpoints de e-mail sem rate limit | `common/web/RateLimitFilter` | **pendente**: limitar `POST /admin/{token}/links/email` e `.../participants/{id}/email/resend` |
-| **P14** | SPF ausente no subdomínio de envio | DNS de `mail.barbosalabs.dev` | **pendente**: TXT `v=spf1 include:spf.sendinblue.com -all` (confirmar no Brevo) |
+| **P13** | Endpoints de e-mail sem rate limit | `common/web/RateLimitFilter` | **implementado no código em 2026-11-16**: `links/email` 10/h e `email/resend` 20/h, janela própria e testes; entra em produção com P15 |
+| **P14** | SPF ausente no subdomínio de envio | DNS de `mail.barbosalabs.dev` | **aplicado em 2026-11-16**: TXT `v=spf1 include:spf.sendinblue.com -all`, verificado no DNS público |
 | **P15** | VPS no commit `2b6e2d4`; remoto em `26bd7f4` | deploy | quando o CI publicar a imagem do novo SHA, `APP_TAG=<sha> bash scripts/deploy.sh` |
 
 Detalhes e reprodução em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §8.
@@ -845,12 +845,12 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | `.env` da app | ✅ | `600`, senha de 64 hex, `APP_TAG=2b6e2d4…` |
 | Backup | ✅ | systemd timer, 03:15, retenção 14 dias |
 | E-mail Brevo | ✅ | ligado e validado ponta a ponta; chave restrita a envio |
-| SPF do subdomínio de envio | ❌ | criar TXT em `mail.barbosalabs.dev` (DKIM/DMARC já ok) |
-| Rate limit dos endpoints de e-mail | ❌ | `links/email` e `email/resend` ainda sem limite |
+| SPF do subdomínio de envio | ✅ | TXT `v=spf1 include:spf.sendinblue.com -all` em `mail.barbosalabs.dev`, verificado em 2026-11-16 |
+| Rate limit dos endpoints de e-mail | ✅ (código) | `links/email` 10/h e `email/resend` 20/h; entra em produção com P15 |
 | Cópia off-site do backup | ❌ | backup só na VPS |
 | Restore completo | ❌ | só `pg_restore --list` foi validado |
 | Reboot da VPS | ❌ | não testado |
-| Fluxo no navegador | ❌ | smoke HTTP + 162 testes; falta criar/sortear/apagar |
+| Fluxo no navegador | ❌ | smoke HTTP + 164 testes; falta criar/sortear/apagar |
 | Monitoração externa | ❌ | opcional |
 | `DOCKER-USER` restritivo | ❌ | opcional |
 | Clone raso | ❌ | `git fetch --unshallow` |
@@ -906,17 +906,17 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 - **P10:** os exemplos já usam `BREVO_FROM_NAME="Amigo Secreto"`; confirme o mesmo no `.env` do
   servidor. O `deploy.sh` valida o arquivo antes de carregar.
 
-### 6. Brevo (fase 2) (feito; SPF pendente)
+### 6. Brevo (fase 2) (feito)
 
 - Domínio de envio `mail.barbosalabs.dev` autenticado; sender `no-reply@mail.barbosalabs.dev`.
 - API key de produção **restrita a envio**; `GET /v3/account` retorna 403 e isso é esperado.
 - E-mail **ligado e validado ponta a ponta** em 2026-11-16: 2 notificações `SENT`, `attempts=1`,
   painel **Enviado**, zero erro/retentativa. IP de saída da VPS: `147.15.121.26`.
-- **SPF pendente:** falta o TXT `v=spf1 include:spf.sendinblue.com -all` em `mail.barbosalabs.dev`
-  (confirme o valor no Brevo). DKIM e DMARC já estão corretos.
-- **Rate limit pendente:** `POST /admin/{token}/links/email` e
-  `POST /admin/{token}/participants/{id}/email/resend` ainda não têm limite; com o e-mail ativo,
-  podem queimar a cota de 300/dia e a reputação do domínio.
+- **SPF:** publicado em 2026-11-16 (`v=spf1 include:spf.sendinblue.com -all`) e verificado no DNS
+  público; DKIM e DMARC já estavam corretos.
+- **Rate limit:** `POST /admin/{token}/links/email` (10/h) e
+  `POST /admin/{token}/participants/{id}/email/resend` (20/h), com janela de 1h, para proteger a cota
+  de 300/dia e a reputação do domínio; está no código e entra em produção com P15.
 
 ### 7. Backup e restore (parcial)
 
@@ -935,8 +935,6 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 - Criar um evento real de teste pelo navegador e apagar depois (o fluxo HTTP já foi exercitado).
 - Configurar monitoração externa (ex.: Uptime Kuma/healthchecks.io) apontando para `/`.
 - Aplicar `mem_limit: 256m` no Caddy do `/opt/edge/compose.yml` (P12) e recriar o serviço.
-- Criar o SPF de `mail.barbosalabs.dev` no DNS (P14) e confirmar no Brevo.
-- Implementar rate limit em `links/email` e `email/resend` (P13).
 - Quando o CI publicar a imagem do commit novo (`26bd7f4` ou posterior), rodar
   `APP_TAG=<sha> bash scripts/deploy.sh` (P15).
 - `git fetch --unshallow` se precisar de histórico/rollback por commit.
@@ -947,8 +945,6 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 
 | Item | Status | Como fechar |
 | --- | --- | --- |
-| SPF do subdomínio de envio | ❌ | criar TXT em `mail.barbosalabs.dev` (DKIM/DMARC já ok) |
-| Rate limit dos endpoints de e-mail | ❌ | implementar limite em `links/email` e `email/resend` |
 | Deploy da imagem do commit novo | ❌ | aguardar o CI publicar o SHA e rodar `deploy.sh` |
 | Cópia off-site do backup | ❌ | `rclone`/`rsync` para storage externo |
 | Restore completo | ❌ | banco descartável + `restore-postgres.sh` |
@@ -962,6 +958,7 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | Atualização de imagens base | ❌ | `docker compose pull` periódico; avaliar fixar digest |
 
 **Pendências de código/configuração:** P9–P11 aplicadas; P12 (Caddy `mem_limit`) está no template
-externo; P13 (rate limit dos endpoints de e-mail) e P14 (SPF) estão pendentes; P15 é o deploy da
-imagem do commit novo. A suíte de **162 testes** e os testes de produção de 2026-11-15/16 cobrem o
-fluxo funcional em nível de aplicação, mas não substituem o teste no navegador.
+externo; P13 (rate limit dos endpoints de e-mail) foi implementado no código e P14 (SPF) foi aplicada
+em 2026-11-16; P15 é o deploy da imagem do commit novo. A suíte de **164 testes** e os testes de
+produção de 2026-11-15/16 cobrem o fluxo funcional em nível de aplicação, mas não substituem o teste
+no navegador.
