@@ -364,6 +364,10 @@ Não foram abertas portas `5432`, `8080` ou `2019`; egress rules não foram alte
 
 ## 8. Pendências de código no repositório (para o agente de código)
 
+> **Atualização posterior (2026-11-15):** P9, P10 e P11 foram aplicadas ao repositório; P12 foi
+> incluída no template do stack de borda e precisa ser aplicada no `/opt/edge/compose.yml` da VPS.
+> Ver [`DEPLOY.md#pendências-abertas-após-o-deploy`](./DEPLOY.md#pendências-abertas-após-o-deploy).
+
 ### P9 — `db` sem limite de memória (divergência com o próprio `INFRA-VPS.md`)
 
 `docker-compose.prod.yml`:

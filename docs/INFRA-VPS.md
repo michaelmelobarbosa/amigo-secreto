@@ -117,6 +117,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    mem_limit: 256m
     ports:
       - "80:80"
       - "443:443"
@@ -372,7 +373,9 @@ O que foi executado **fora** do repositório:
 - [x] `docker compose -f /opt/edge/compose.yml up -d` → `edge-caddy-1`; certificado Let's Encrypt.
 - [x] No projeto: `APP_TAG=2b6e2d4… bash scripts/deploy.sh` → app saudável.
 - [x] Validação: HTTPS, `/actuator` 404, HSTS e `docker ps` mostrando só o Caddy publicando portas.
-- [ ] `mem_limit: 256m` no Caddy (P12, opcional).
+- [x] Template do Caddy com `mem_limit: 256m` (P12).
+- [ ] Aplicar o `mem_limit` no `/opt/edge/compose.yml` da VPS e recriar:
+  `cd /opt/edge && sudo docker compose -f compose.yml up -d caddy`.
 
 **Cuidado na primeira migração:** não rode os dois Caddys ao mesmo tempo — 80/443 só aceitam um
 processo. Pare o antigo antes de subir o novo, ou aceite alguns segundos de 502. Registro completo
@@ -381,7 +384,8 @@ em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 ## Riscos e pontos abertos
 
 - **Recursos:** 2 vCPU e 11 GiB para N apps. Defina `mem_limit` e `cpus` por serviço; sem isso, um
-  OOM em uma app pode derrubar as outras. O Caddy do stack `edge` ainda não tem `mem_limit` (P12).
+  OOM em uma app pode derrubar as outras. O Caddy do stack `edge` tem `mem_limit: 256m` no template;
+  confirme o valor no `/opt/edge/compose.yml` da VPS (P12).
 - **Disco:** 28 GB livres. Imagens, camadas, logs e backups competem. Não compile na VPS; controle
   rotação e retenção.
 - **Blast radius da borda:** o Caddy é ponto único de falha para todos os sites. Se ele cair, todos
@@ -407,4 +411,5 @@ em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 | 2026-11-15 | Caddy desacoplado de fato: `edge` fora deste repositório | a app publica só `expose: 8080`; o ingress é compartilhado e roteia várias apps |
 | 2026-11-15 | Site com hostname literal em `sites/*.caddy`, não `{$DOMAIN}` | um `.env` por stack não comporta N domínios; nova app = novo arquivo + reload |
 | 2026-11-15 | Backup por systemd timer, não cron | a VPS não tem `cron`; `Persistent=true` cobre janelas perdidas |
-| 2026-11-15 | `db` ainda sem `mem_limit` | lacuna conhecida (P9); o `INFRA-VPS.md` recomenda `512m` |
+| 2026-11-15 | `db` com `mem_limit: 512m` e `cpus: "0.5"` | P9 aplicado: evita que o Postgres veja os 11 GiB do host |
+| 2026-11-15 | Caddy com `mem_limit: 256m` no template | P12; falta aplicar no `/opt/edge/compose.yml` da VPS |
