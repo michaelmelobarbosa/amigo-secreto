@@ -41,7 +41,7 @@ Pacotes por funcionalidade em `br.com.michael.amigosecreto`: `event`, `participa
 
 ## O que já existe
 
-`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail, o rate limiting e o deploy estão **em produção desde 2026-11-15** (`https://amigo-secreto.barbosalabs.dev`); o Caddy é um stack de borda externo e o registro está em `docs/DEPLOY_CONCLUIDO.md`. Pendências abertas: P9 (`db` sem `mem_limit`), P10 (aspas no `.env.prod.example`), P11 (`jsessionid`), P12 (Caddy `mem_limit`), e-mail real, cópia off-site do backup, restore completo, reboot e fluxo no navegador.
+`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail, o rate limiting e o deploy estão **em produção desde 2026-11-15** (`https://amigo-secreto.barbosalabs.dev`); o Caddy é um stack de borda externo e o registro está em `docs/DEPLOY_CONCLUIDO.md`. P9–P11 foram aplicadas (db 512m, exemplos com aspas, sessão só por cookie); P12 está no template do Caddy. Pendentes: e-mail real, cópia off-site do backup, restore completo, reboot e fluxo no navegador.
 
 ## Agentes do projeto
 

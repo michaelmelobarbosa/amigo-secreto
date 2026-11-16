@@ -3,3 +3,5 @@
 Dockerfile text eol=lf
 *.sh text eol=lf
 Caddyfile text eol=lf
+.env.example text eol=lf
+.env.prod.example text eol=lf

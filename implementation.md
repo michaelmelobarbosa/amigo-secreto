@@ -31,7 +31,7 @@ Já implementado:
 - Acesso do organizador: cartão de links com cópia, download em TXT e envio por e-mail sob demanda (`OrganizerLinksMailer`), sem persistir o endereço e sem virar login.
 - Deploy: `Dockerfile` multi-stage sem QEMU (build nativo + runtime copiado), `docker-compose.prod.yml` (app + Postgres, imagem do GHCR com tag SHA, `mem_limit`/`cpus` e logging), Caddy de borda externo, `scripts/deploy.sh`, scripts de backup/restore, `docs/DEPLOY.md` (operação + decisões), `docs/INFRA-VPS.md` (stack de borda e múltiplas apps) e `docs/DEPLOY_CONCLUIDO.md` (execução real em 2026-11-15).
 - Portfólio: `README.md`, `docs/IDEAS.md` e CI em `.github/workflows/ci.yml`.
-- Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox, e-mail e rate limiting (159 testes).
+- Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox, e-mail e rate limiting (160 testes).
 
 **Deploy real concluído em 2026-11-15:** `https://amigo-secreto.barbosalabs.dev` no ar com TLS Let's Encrypt, Flyway V1–V3 em Postgres 17, `amigo-app` + `amigo-secreto-db-1` sem portas publicadas, Caddy de borda `edge-caddy-1` e backup diário por systemd timer. Imagem pública no GHCR (`2b6e2d4…`). Registro completo em [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
 
@@ -57,7 +57,7 @@ Já implementado:
 
 **Bloco 10 (deploy aplicável) concluído:** P1–P6 aplicadas (Postgres de dev em loopback, `mem_limit`/`cpus`, rotação de log, platform args, CI publica ARM64 no GHCR e Compose usa `APP_IMAGE:APP_TAG`). O Caddy foi desacoplado: o Compose do projeto tem só `app` + `db`, a app entra na rede externa `edge` como `amigo-app`, e o stack de borda vive em [`docs/INFRA-VPS.md`](docs/INFRA-VPS.md). Adicionados `scripts/deploy.sh`, `.env.prod.example` com imagem/tag/rede e a imagem de runtime sem `curl` (BusyBox estático para o HEALTHCHECK). O build ARM64 não usa QEMU.
 
-**Bloco 11 (deploy real) concluído:** `https://amigo-secreto.barbosalabs.dev` no ar em 2026-11-15; DNS A na Name.com, Security List Oracle (TCP 80/443 + UDP 443), stack `edge` com `edge-caddy-1`, imagem pública `ghcr.io/michaelmelobarbosa/amigo-secreto:2b6e2d4…`, Flyway V1–V3 e backup diário por systemd timer. Primeira tentativa falhou por `BREVO_FROM_NAME` sem aspas no `.env` (P10), corrigido no servidor. Ficaram abertos: e-mail real, cópia off-site, restore completo, reboot, fluxo no navegador, P9 (db `mem_limit`), P10 (exemplo), P11 (`jsessionid`) e P12 (Caddy `mem_limit`). Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
+**Bloco 11 (deploy real) concluído:** `https://amigo-secreto.barbosalabs.dev` no ar em 2026-11-15; DNS A na Name.com, Security List Oracle (TCP 80/443 + UDP 443), stack `edge` com `edge-caddy-1`, imagem pública `ghcr.io/michaelmelobarbosa/amigo-secreto:2b6e2d4…`, Flyway V1–V3 e backup diário por systemd timer. Primeira tentativa falhou por `BREVO_FROM_NAME` sem aspas no `.env` (P10), corrigido no servidor. P9–P11 foram aplicadas depois (db 512m, exemplos com aspas, sessão só por cookie); P12 está no template do Caddy. Continuam abertos: e-mail real, cópia off-site, restore completo, reboot e fluxo no navegador. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
 
 ---
 
@@ -602,7 +602,7 @@ Operações de escrita carregam o `Event` com `PESSIMISTIC_WRITE`. O estado é r
 - [x] Tokens inválidos retornam 404; headers de privacidade presentes; CSRF em todos os POSTs.
 - [x] Rate limiting em memória por IP nas rotas de criação, convite, sorteio e wishlist; validado em produção em 2026-11-15.
 - [x] Flyway aplicando a V1–V3 do zero em Postgres real, com `ddl-auto=validate` (validado no deploy de 2026-11-15).
-- [x] Testes unitários, de serviço e de integração passando (159 testes).
+- [x] Testes unitários, de serviço e de integração passando (160 testes).
 - [x] Deploy Docker/Compose funcional na VPS: `https://amigo-secreto.barbosalabs.dev` no ar, Caddy de borda, DNS, Security List, GHCR e backup por systemd timer.
 
 ---
@@ -615,10 +615,10 @@ O que ficou conscientemente fora do MVP está detalhado em [`docs/IDEAS.md`](doc
 - **Dashboard em uma transação só**: leituras separadas podem mostrar estado misto por um instante.
 - **Postgres no CI/Testcontainers**: a suíte roda em H2; Flyway e `ddl-auto=validate` foram provados no Postgres real no deploy, mas locks/tipos sob concorrência ainda não têm teste no banco real.
 - **Testes de concorrência** (draw × draw, última vaga, rollback de redraw/reopen).
-- **P9 — `db` sem `mem_limit`**: o Postgres vê os ~11 GiB do host; adicionar `mem_limit: 512m`.
-- **P10 — `.env.example`/`.env.prod.example` quebram o `source .env`**: `BREVO_FROM_NAME` precisa de aspas.
-- **P11 — `;jsessionid` na URL**: adicionar `server.servlet.session.tracking-modes: cookie`.
-- **P12 — Caddy de borda sem `mem_limit`** (externo, opcional).
+- **P9–P11 aplicadas em 2026-11-15:** `db` com `mem_limit: 512m`/`cpus: "0.5"`, exemplos de `.env`
+  com `BREVO_FROM_NAME="Amigo Secreto"` e `tracking-modes: cookie` (teste de URL sem `;jsessionid`).
+- **P12 — Caddy de borda:** o template tem `mem_limit: 256m`; falta aplicar no
+  `/opt/edge/compose.yml` da VPS.
 - **Tokens em texto claro** e `Assignment` em claro no banco: risco aceito do modelo “link = credencial”.
 - **Tokens na URL**: histórico do navegador; `no-store`/`no-referrer` mitigam, não apagam.
 - **E-mail:** dedupe por endereço (melhor esforço sem verificação) ainda não foi implementado; telefone/WhatsApp API/SMS ficam fora. O envio real está desligado até a API key de produção.

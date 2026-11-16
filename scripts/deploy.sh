@@ -35,9 +35,21 @@ fi
 # APP_TAG passado na linha de comando vence o valor do .env.
 env_app_tag="${APP_TAG:-}"
 
+# Normaliza CRLF e valida antes de carregar. Valores com espaço sem aspas quebram o
+# "source" (ex.: BREVO_FROM_NAME=Amigo Secreto -> "Secreto: command not found").
+env_file="$(mktemp)"
+env_err="$(mktemp)"
+trap 'rm -f "$env_file" "$env_err"' EXIT
+# Remove BOM (editores Windows) e CRLF antes de carregar com source.
+sed '1s/^\xEF\xBB\xBF//' .env | tr -d '\r' > "$env_file"
+
 set -a
-# shellcheck disable=SC1091
-source .env
+if ! source "$env_file" 2>"$env_err"; then
+    echo "ERRO: não foi possível carregar o .env." >&2
+    echo "      Valores com espaço precisam de aspas: BREVO_FROM_NAME=\"Amigo Secreto\"." >&2
+    sed 's/^/      /' "$env_err" >&2
+    exit 1
+fi
 set +a
 
 if [[ -n "$env_app_tag" ]]; then
