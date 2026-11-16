@@ -2,7 +2,7 @@
 <html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments/common :: head('Sua página do amigo secreto')}"></head>
 <body>
-<header th:replace="~{fragments/common :: nav}"></header>
+<header th:replace="~{fragments/common :: nav('')}"></header>
 
 <main class="container content" id="conteudo">
     <div class="alert alert-success" role="status" th:if="${message}" th:text="${message}"></div>
