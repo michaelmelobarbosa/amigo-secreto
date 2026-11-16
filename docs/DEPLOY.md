@@ -42,6 +42,9 @@ Caddy, em um stack separado, fica exposto.
 - **Deploy executado em 2026-11-15:** `https://amigo-secreto.barbosalabs.dev` no ar com TLS
   Let's Encrypt, Flyway V1–V3 aplicado em Postgres 17 e backup diário por systemd timer. Registro
   completo em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
+- **E-mail real ativo e validado em 2026-11-16:** 2 notificações `SENT`, `attempts=1`, painel
+  **Enviado**, zero erro/retentativa; chave de produção restrita a envio. SPF e rate limit dos
+  endpoints de e-mail ainda pendentes.
 - **Dois containers neste projeto**: `db` (Postgres 17) e `app` (Spring Boot). O Caddy é um
   **stack de borda separado**, compartilhado com outras aplicações da VPS; o porquê está em
   [Decisões](#decisões-de-arquitetura-com-justificativa) e em [`INFRA-VPS.md`](./INFRA-VPS.md).
@@ -523,8 +526,11 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
 O envio é **opcional**. Com `EMAIL_ENABLED=false` (padrão), o app usa um sender de log e nada sai do
 servidor; o sorteio continua funcionando e os links seguem sendo copiados/WhatsApp.
 
-**Estado em 2026-11-15:** o e-mail está **desligado** em produção (`EMAIL_ENABLED=false`,
-`BREVO_API_KEY` vazio). O código está pronto; falta a chave de produção. O IP de saída da VPS é
+**Estado em 2026-11-16:** e-mail **ligado e validado ponta a ponta** em produção. O `.env` está com
+`EMAIL_ENABLED=true`, `EMAIL_WORKER_ENABLED=true`, `BREVO_SANDBOX=false` e a chave de produção
+(restrita a envio; `GET /v3/account` → 403 é esperado). O teste real com 2 participantes gerou duas
+notificações `SENT` (`attempts=1`, com `provider_message_id`), o painel exibiu **Enviado** e não houve
+erro/retentativa; o evento de teste foi apagado e o banco voltou a 0/0/0/0. O IP de saída da VPS é
 `147.15.121.26` (relevante se o Brevo usar allowlist).
 
 Para ativar em produção, no `.env` do servidor:
@@ -556,6 +562,23 @@ docker compose -f docker-compose.prod.yml logs --tail=100 app | grep -i -E 'emai
 Teste de fumaça: crie um evento, faça um sorteio com um participante que tenha e-mail e confira no
 painel o status "Enviado". Se ficar "Falhou", veja `last_error` no banco (sem logar e-mail/token) e o
 histórico em **Brevo → Transactional → Logs**. Guia completo: [`EMAIL-BREVO.md`](EMAIL-BREVO.md).
+
+Na VPS, os dois testes rápidos são:
+
+```bash
+# 1) valida a API key, o domínio e o IP de saída (147.15.121.26)
+TEST_EMAIL=seu@email.com bash scripts/check-brevo.sh
+
+# 2) valida o caminho real da aplicação (cria evento, envia os links e apaga o evento)
+TEST_EMAIL=seu@email.com bash scripts/smoke-email.sh
+```
+
+O primeiro não passa pela aplicação; o segundo usa o mesmo `EmailSender` do painel. O fluxo completo
+com outbox/worker é o sorteio acima.
+
+> Os scripts `check-brevo.sh` e `smoke-email.sh` estão no working tree e precisam entrar no próximo
+> commit. No teste de 2026-11-16 eles ainda não estavam no remoto, então o Hermes fez o equivalente
+> via API/UI.
 
 > A cota do plano grátis é 300 e-mails/dia. Um evento de 100 participantes com um refazer gera 200
 > envios; dois refazeres no mesmo dia estouram a cota. O worker tenta de novo depois, mas o provedor
@@ -684,6 +707,9 @@ docker rm -f restore-test
   os padrões de [`RATE-LIMITING.md`](RATE-LIMITING.md). **Validado em produção em 2026-11-15:** os
   cinco primeiros `POST /events` passaram, o sexto retornou `429` com `Retry-After: 600`, e
   `X-Forwarded-For` forjado (`9.9.9.9`, `8.8.4.4`) não criou bucket novo.
+- **E-mail real ativo:** `POST /admin/{token}/links/email` e
+  `POST /admin/{token}/participants/{id}/email/resend` ainda **não** têm rate limit (P13). Com a
+  cota de 300/dia, esses endpoints podem esgotar o Brevo e a reputação do domínio.
 - **`ubuntu` no grupo `docker` = root equivalente.** O acesso ao socket do Docker permite controlar
   todos os containers. Aceito para operação single-tenant.
 - **HSTS com `includeSubDomains`** está ativo: subdomínios de `amigo-secreto.barbosalabs.dev` ficam
@@ -763,6 +789,7 @@ O que continua **fora do repositório** está na seção
 
 Estas foram encontradas na execução real. **P9–P11 foram aplicadas em 2026-11-15**; P12 foi
 incluída no template do stack de borda e depende de aplicação no `/opt/edge/compose.yml` da VPS.
+P13/P14 surgiram com o e-mail ativo em 2026-11-16; P15 é operacional.
 
 | # | Pendência | Onde | Estado / ação |
 | --- | --- | --- | --- |
@@ -770,6 +797,9 @@ incluída no template do stack de borda e depende de aplicação no `/opt/edge/c
 | **P10** | `.env.example`/`.env.prod.example` quebram `source .env` | ambos | **aplicado**: `BREVO_FROM_NAME="Amigo Secreto"` nos dois; `deploy.sh` valida o `.env` |
 | **P11** | `;jsessionid` na URL quando não há cookie | `application.yaml` | **aplicado**: `tracking-modes: cookie` + `SessionTrackingIntegrationTest` |
 | **P12** | Caddy de borda sem `mem_limit` | `/opt/edge/compose.yml` (externo) | **template atualizado** com `256m`; falta aplicar na VPS |
+| **P13** | Endpoints de e-mail sem rate limit | `common/web/RateLimitFilter` | **pendente**: limitar `POST /admin/{token}/links/email` e `.../participants/{id}/email/resend` |
+| **P14** | SPF ausente no subdomínio de envio | DNS de `mail.barbosalabs.dev` | **pendente**: TXT `v=spf1 include:spf.sendinblue.com -all` (confirmar no Brevo) |
+| **P15** | VPS no commit `2b6e2d4`; remoto em `26bd7f4` | deploy | quando o CI publicar a imagem do novo SHA, `APP_TAG=<sha> bash scripts/deploy.sh` |
 
 Detalhes e reprodução em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §8.
 
@@ -781,7 +811,7 @@ máquina. Evidências em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 - [x] Ambiente medido: Ubuntu 24.04.5, aarch64, 2 vCPU, 11 GiB, 28 GB livres.
 - [x] Portas 80/443 livres antes do Caddy.
 - [x] Docker 29.9.3 + Compose v5.7.1 instalados; `ubuntu` no grupo `docker`.
-- [x] P1–P6 aplicadas e suíte verde (159 na execução; 160 após o teste de sessão).
+- [x] P1–P6 aplicadas e suíte verde (159 na execução; 162 após os testes de sessão e fail-fast).
 - [x] TCP 80, TCP 443 e UDP 443 liberados na Security List da Oracle.
 - [x] Rede `edge` + `/opt/edge` + `edge-caddy-1` de pé; certificado Let's Encrypt emitido.
 - [x] Imagem ARM64 pública no GHCR; nenhum `docker login` necessário.
@@ -814,11 +844,13 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | GHCR | ✅ | pacote público; sem `docker login` |
 | `.env` da app | ✅ | `600`, senha de 64 hex, `APP_TAG=2b6e2d4…` |
 | Backup | ✅ | systemd timer, 03:15, retenção 14 dias |
-| E-mail Brevo | ❌ | falta API key de produção; `EMAIL_ENABLED=false` |
+| E-mail Brevo | ✅ | ligado e validado ponta a ponta; chave restrita a envio |
+| SPF do subdomínio de envio | ❌ | criar TXT em `mail.barbosalabs.dev` (DKIM/DMARC já ok) |
+| Rate limit dos endpoints de e-mail | ❌ | `links/email` e `email/resend` ainda sem limite |
 | Cópia off-site do backup | ❌ | backup só na VPS |
 | Restore completo | ❌ | só `pg_restore --list` foi validado |
 | Reboot da VPS | ❌ | não testado |
-| Fluxo no navegador | ❌ | smoke HTTP + 160 testes; falta criar/sortear/apagar |
+| Fluxo no navegador | ❌ | smoke HTTP + 162 testes; falta criar/sortear/apagar |
 | Monitoração externa | ❌ | opcional |
 | `DOCKER-USER` restritivo | ❌ | opcional |
 | Clone raso | ❌ | `git fetch --unshallow` |
@@ -870,18 +902,21 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 - `POSTGRES_PASSWORD` gerada com `openssl rand -hex 32` (64 hex), só no servidor.
 - `DOMAIN=amigo-secreto.barbosalabs.dev`, `APP_IMAGE=ghcr.io/michaelmelobarbosa/amigo-secreto`,
   `APP_TAG=2b6e2d4…`, `EDGE_NETWORK=edge`.
-- `RATE_LIMIT_*` com os padrões e `EMAIL_ENABLED=false` no primeiro deploy.
+- `RATE_LIMIT_*` com os padrões; `EMAIL_ENABLED=true` desde 2026-11-16.
 - **P10:** os exemplos já usam `BREVO_FROM_NAME="Amigo Secreto"`; confirme o mesmo no `.env` do
   servidor. O `deploy.sh` valida o arquivo antes de carregar.
 
-### 6. Brevo (fase 2) (pendente)
+### 6. Brevo (fase 2) (feito; SPF pendente)
 
 - Domínio de envio `mail.barbosalabs.dev` autenticado; sender `no-reply@mail.barbosalabs.dev`.
-- Falta a **API key de produção**; se usar allowlist, o IP de saída da VPS é `147.15.121.26`.
-- Para envio real: `EMAIL_ENABLED=true`, `EMAIL_WORKER_ENABLED=true`, `BREVO_SANDBOX=false` e
-  `docker compose -f docker-compose.prod.yml up -d app`.
-- Teste de fumaça: criar evento → sortear com participante que tenha e-mail → conferir "Enviado" no
-  painel e o log transacional do Brevo.
+- API key de produção **restrita a envio**; `GET /v3/account` retorna 403 e isso é esperado.
+- E-mail **ligado e validado ponta a ponta** em 2026-11-16: 2 notificações `SENT`, `attempts=1`,
+  painel **Enviado**, zero erro/retentativa. IP de saída da VPS: `147.15.121.26`.
+- **SPF pendente:** falta o TXT `v=spf1 include:spf.sendinblue.com -all` em `mail.barbosalabs.dev`
+  (confirme o valor no Brevo). DKIM e DMARC já estão corretos.
+- **Rate limit pendente:** `POST /admin/{token}/links/email` e
+  `POST /admin/{token}/participants/{id}/email/resend` ainda não têm limite; com o e-mail ativo,
+  podem queimar a cota de 300/dia e a reputação do domínio.
 
 ### 7. Backup e restore (parcial)
 
@@ -897,9 +932,13 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 
 - Reiniciar a VPS em janela controlada e conferir: 3 containers `Up`, `iptables -S FORWARD` com
   `DOCKER-USER` no topo, HTTPS 200 e `systemctl list-timers`.
-- Criar um evento real de teste pelo navegador e apagar depois (o banco está em 0 eventos).
+- Criar um evento real de teste pelo navegador e apagar depois (o fluxo HTTP já foi exercitado).
 - Configurar monitoração externa (ex.: Uptime Kuma/healthchecks.io) apontando para `/`.
 - Aplicar `mem_limit: 256m` no Caddy do `/opt/edge/compose.yml` (P12) e recriar o serviço.
+- Criar o SPF de `mail.barbosalabs.dev` no DNS (P14) e confirmar no Brevo.
+- Implementar rate limit em `links/email` e `email/resend` (P13).
+- Quando o CI publicar a imagem do commit novo (`26bd7f4` ou posterior), rodar
+  `APP_TAG=<sha> bash scripts/deploy.sh` (P15).
 - `git fetch --unshallow` se precisar de histórico/rollback por commit.
 - `docker rmi hello-world alpine:3.20` para limpar as imagens de teste.
 - Opcional: CD com `appleboy/ssh-action` rodando `scripts/deploy.sh` com `APP_TAG=$GITHUB_SHA`.
@@ -908,7 +947,9 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 
 | Item | Status | Como fechar |
 | --- | --- | --- |
-| E-mail real (Brevo) | ❌ | API key de produção + `EMAIL_ENABLED=true` + teste de fumaça |
+| SPF do subdomínio de envio | ❌ | criar TXT em `mail.barbosalabs.dev` (DKIM/DMARC já ok) |
+| Rate limit dos endpoints de e-mail | ❌ | implementar limite em `links/email` e `email/resend` |
+| Deploy da imagem do commit novo | ❌ | aguardar o CI publicar o SHA e rodar `deploy.sh` |
 | Cópia off-site do backup | ❌ | `rclone`/`rsync` para storage externo |
 | Restore completo | ❌ | banco descartável + `restore-postgres.sh` |
 | Reboot da VPS | ❌ | reiniciar e conferir containers, iptables, HTTPS e timer |
@@ -921,5 +962,6 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | Atualização de imagens base | ❌ | `docker compose pull` periódico; avaliar fixar digest |
 
 **Pendências de código/configuração:** P9–P11 aplicadas; P12 (Caddy `mem_limit`) está no template
-externo e falta aplicar na VPS. A suíte de **160 testes** e o smoke HTTP de 2026-11-15 cobrem o fluxo
-funcional em nível de aplicação, mas não substituem o teste no navegador.
+externo; P13 (rate limit dos endpoints de e-mail) e P14 (SPF) estão pendentes; P15 é o deploy da
+imagem do commit novo. A suíte de **162 testes** e os testes de produção de 2026-11-15/16 cobrem o
+fluxo funcional em nível de aplicação, mas não substituem o teste no navegador.

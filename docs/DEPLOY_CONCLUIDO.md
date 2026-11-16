@@ -1,6 +1,6 @@
 # DEPLOY_CONCLUIDO — Amigo Secreto na VPS `hermes-vps`
 
-> **Documento de execução real.** Registra o que foi efetivamente executado em **2026-11-15** (fuso
+> **Documento de execução real.** Registra o que foi efetivamente executado em **2026-11-15/16** (fuso
 > `-03`) para colocar `https://amigo-secreto.barbosalabs.dev` no ar, com as evidências de verificação
 > e a lista do que ficou de fora. Complementa [`DEPLOY.md`](./DEPLOY.md) e
 > [`INFRA-VPS.md`](./INFRA-VPS.md) — onde este documento divergir deles, **este é o que
@@ -367,6 +367,11 @@ Não foram abertas portas `5432`, `8080` ou `2019`; egress rules não foram alte
 > **Atualização posterior (2026-11-15):** P9, P10 e P11 foram aplicadas ao repositório; P12 foi
 > incluída no template do stack de borda e precisa ser aplicada no `/opt/edge/compose.yml` da VPS.
 > Ver [`DEPLOY.md#pendências-abertas-após-o-deploy`](./DEPLOY.md#pendências-abertas-após-o-deploy).
+>
+> **Atualização de 2026-11-16:** a API key de produção foi validada e o e-mail foi **ligado e
+> validado ponta a ponta** (2 notificações `SENT`, painel **Enviado**, evento de teste apagado). Ver
+> §14. As pendências restantes são SPF, rate limit dos endpoints de e-mail e o deploy da imagem do
+> commit novo.
 
 ### P9 — `db` sem limite de memória (divergência com o próprio `INFRA-VPS.md`)
 
@@ -423,7 +428,7 @@ todos os serviços, vale um bloco análogo (ex.: `mem_limit: 256m`).
 
 | Item | Por quê | Como fechar |
 | --- | --- | --- |
-| **E-mail real (Brevo)** | Falta a **API key de produção**; `.env` está `EMAIL_ENABLED=false` | Preencher `BREVO_API_KEY`, `EMAIL_ENABLED=true`, `EMAIL_WORKER_ENABLED=true`, `BREVO_SANDBOX=false`, `docker compose -f docker-compose.prod.yml up -d app` e fazer o teste de fumaça (criar evento → sortear → status "Enviado"). IP de saída da VPS para allowlist: `147.15.121.26` |
+| **E-mail real (Brevo)** | ✅ Validado em 2026-11-16: 2 `SENT`, `attempts=1`, painel **Enviado**, evento apagado | Ver §14; pendências: SPF e rate limit dos endpoints de e-mail |
 | **Cópia off-site do backup** | Decisão do dono: "só na VPS por enquanto" | Backup no mesmo disco **não** protege contra perda da VPS. Restam 28 GB; `backups/` é `700` e a retenção é 14 dias |
 | **Restore completo testado** | Só foi validada a integridade do dump (`pg_restore --list`) | Rodar `scripts/restore-postgres.sh` num banco descartável (procedimento do `DEPLOY.md#restore`) e depois um ciclo real |
 | **Reboot da VPS** | Não foi reiniciada em produção nesta janela | Após o próximo reboot: conferir `docker ps` com os 3 containers `Up`, `iptables -S FORWARD` com `DOCKER-USER` no topo, `https://…` 200 e `systemctl list-timers` |
@@ -434,6 +439,10 @@ todos os serviços, vale um bloco análogo (ex.: `mem_limit: 256m`).
 | **Imagens de teste no host** | `hello-world` e `alpine:3.20` ficaram para trás da validação | `docker image prune -a` com critério, ou `docker rmi hello-world alpine:3.20` |
 | **Deploy automatizado (CD)** | O fluxo é manual por decisão do projeto (tag imutável + script) | Opcional: Action com `appleboy/ssh-action` rodando `scripts/deploy.sh` com `APP_TAG=$GITHUB_SHA` |
 | **Atualização de imagens base** | `postgres:17-alpine`/`caddy:2-alpine` são flutuantes por tag | `docker compose pull` periódico + `docker image prune`; avaliar fixar digest |
+
+> O e-mail real foi validado em 2026-11-16 via API/UI (§14). Os scripts `scripts/check-brevo.sh` e
+> `scripts/smoke-email.sh` estão no working tree e precisam ser commitados para uso na VPS; o
+> procedimento está em [`EMAIL-BREVO.md`](./EMAIL-BREVO.md) §8.1/8.2.
 
 ---
 
@@ -523,6 +532,47 @@ systemctl list-timers amigo-secreto-backup.timer                                
 ## 13. Referências
 
 - `docs/DEPLOY.md`, `docs/INFRA-VPS.md`, `docs/RATE-LIMITING.md`, `docs/EMAIL-BREVO.md` (repo).
-- Commit em produção: `2b6e2d4fc13d98eb67cfcd4bd91899957a028206` ("Merge pull request #13 from
-  michaelmelobarbosa/dev").
+- Commit em produção no deploy de 2026-11-15: `2b6e2d4fc13d98eb67cfcd4bd91899957a028206` ("Merge pull
+  request #13 from michaelmelobarbosa/dev"). No teste de e-mail de 2026-11-16, a VPS ainda estava
+  nesse commit; o remoto já estava em `26bd7f4` (P9–P12), mas sem imagem publicada para esse SHA.
 - CI: `.github/workflows/ci.yml` — job `image` publica `linux/arm64` com tag `:<sha>`; PR só testa.
+
+---
+
+## 14. Atualização 2026-11-16 — e-mail ligado e validado
+
+Execução pelo Hermes, com autorização do dono.
+
+| Passo | Resultado |
+| --- | --- |
+| Validação da chave antes do `.env` | `POST /v3/smtp/email` com `X-Sib-Sandbox: drop` → `201` + `messageId`; chave, remetente e domínio aceitos |
+| Escopo da chave | `GET /v3/account` → `403 permission_denied`; chave **restrita a envio** (menor privilégio, esperado) |
+| `.env` atualizado | `EMAIL_ENABLED=true`, `EMAIL_WORKER_ENABLED=true`, `BREVO_SANDBOX=false`, `BREVO_API_KEY` gravada; `600`; backup `.env.bak-20261116` também `600` |
+| Container | `up -d app` → `amigo-app healthy`; dentro do container: `EMAIL_ENABLED=true`, `SANDBOX=false`, `FROM=no-reply@mail.barbosalabs.dev`, `KEY_LEN=89` |
+| Teste ponta a ponta | Evento + 2 participantes com e-mail → `POST /draw` → worker do outbox |
+| Outbox | `Ana Teste` (`michaelmelobarbosa+ana@gmail.com`) e `Bruno Teste` (`michaelmelobarbosa+bruno@gmail.com`): `SENT`, `attempts=1`, `provider_message_id` `<202611161300.56926194945@smtp-relay.mailin.fr>` / `<202611161300.34857283944@smtp-relay.mailin.fr>`, `enviado_em` 13:00:54/55 |
+| Painel | **Enviado** nas duas linhas; zero erro/aviso do Brevo no log; nenhuma retentativa |
+| Entrega | Os dois e-mails foram entregues de verdade (sandbox off) para `michaelmelobarbosa+ana@gmail.com` e `+bruno@gmail.com` |
+| Limpeza | Evento apagado via `POST /admin/{token}/delete` → `302`; token agora `404`; banco em 0 eventos, 0 participantes, 0 notificações, 0 assignments |
+| Segredos | `/tmp/brevo.key`, cookies e respostas da API removidos |
+
+### 14.1 Correções e pendências
+
+- **Scripts:** `scripts/check-brevo.sh` e `scripts/smoke-email.sh` **não estavam no remoto** no
+  momento do teste; o Hermes fez o equivalente via API/UI. Os scripts estão no repositório de
+  trabalho e precisam entrar no próximo commit para serem usados na VPS.
+- **SPF:** Brevo code, DKIM (`brevo1`/`brevo2._domainkey.mail.barbosalabs.dev`) e DMARC (`p=none`,
+  `rua@dmarc.brevo.com`) estão publicados, mas **não há SPF** em `mail.barbosalabs.dev` nem no apex.
+  A entrega funciona por DKIM/DMARC, mas a reputação fica mais frágil. Criar:
+  `mail.barbosalabs.dev TXT "v=spf1 include:spf.sendinblue.com -all"` (confirmar o valor na aba de
+  autenticação do Brevo).
+- **Rate limit:** `POST /admin/{token}/links/email` e
+  `POST /admin/{token}/participants/{id}/email/resend` ainda não têm limite. Com o e-mail ativo, isso
+  queima a cota de 300/dia e a reputação do domínio; é a próxima prioridade de segurança.
+- **Imagem/deploy:** a VPS roda `2b6e2d4`; o remoto está em `26bd7f4` (P9–P12) e ainda não havia
+  imagem publicada para esse SHA. Quando o CI publicar, o deploy é
+  `APP_TAG=<novo-sha> bash scripts/deploy.sh`.
+- **Cota:** 300 e-mails/dia no plano grátis. Um sorteio de 100 participantes usa 100; cada refazer
+  usa mais 100 — dois refazeres no mesmo dia estouram a cota.
+- **Testes seguros:** `BREVO_SANDBOX=true` volta a ser o modo de testar sem entregar; o
+  `check-brevo.sh` envia com `X-Sib-Sandbox: drop` nesse modo.

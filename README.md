@@ -2,7 +2,7 @@
 
 Aplicação web para organizar amigo secreto **sem login**, com acesso por links que carregam tokens. Serve para uso real (família e trabalho) e como projeto de portfólio, com deploy em VPS própria.
 
-> **Status:** em produção em `https://amigo-secreto.barbosalabs.dev` desde 2026-11-15. MVP funcional com e-mail na fase 2 e rate limiting em memória. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica, envio do link por Brevo e limite de requisições por IP implementados. **160 testes** passando.
+> **Status:** em produção em `https://amigo-secreto.barbosalabs.dev` desde 2026-11-15, com e-mail real ativo e validado em 2026-11-16. MVP funcional com e-mail na fase 2 e rate limiting em memória. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica, envio do link por Brevo e limite de requisições por IP implementados. **162 testes** passando.
 
 ## Funcionalidades
 
@@ -25,6 +25,7 @@ Aplicação web para organizar amigo secreto **sem login**, com acesso por links
 - Token inválido retorna **404**, sem confirmar existência.
 - CSRF próprio por token de sessão em todos os POSTs (não há Spring Security).
 - Rate limiting em memória por IP em `POST /events`, `/join`, `draw`/`redraw` e wishlist, com `429` + `Retry-After` ([plano e limites](docs/RATE-LIMITING.md)). Validado em produção em 2026-11-15, inclusive contra `X-Forwarded-For` forjado.
+- E-mail real ativo desde 2026-11-16. Os endpoints `links/email` e `email/resend` ainda **não** têm rate limit (P13); a cota do Brevo é 300/dia.
 - Cookie de sessão `HttpOnly` + `SameSite=Lax`; `Secure` por padrão (o perfil `dev` desativa para HTTP local). A sessão é **só por cookie** (`tracking-modes=cookie`), sem `;jsessionid` na URL.
 - Rotas sensíveis com `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Content-Type-Options`, `X-Frame-Options`, CSP e `X-Robots-Tag`.
 - `robots.txt` bloqueia indexação.
@@ -99,7 +100,9 @@ O passo a passo completo está em [docs/DEPLOY.md](docs/DEPLOY.md): imagem ARM64
 
 **Estado:** deploy executado em **2026-11-15**; registro em
 [docs/DEPLOY_CONCLUIDO.md](docs/DEPLOY_CONCLUIDO.md). TLS Let's Encrypt, Flyway V1–V3, backup diário
-por systemd timer. O e-mail está desligado em produção até a API key do Brevo.
+por systemd timer. O e-mail real foi **ligado e validado ponta a ponta em 2026-11-16** (2 `SENT`,
+painel **Enviado**, evento de teste apagado). Pendências: SPF do subdomínio de envio e rate limit dos
+endpoints de e-mail.
 
 ```bash
 cp .env.prod.example .env
@@ -108,6 +111,12 @@ APP_TAG=<sha-do-commit> bash scripts/deploy.sh
 ```
 
 A app não publica portas: ela entra na rede externa `edge` e o Caddy a alcança em `amigo-app:8080`.
+
+Para validar o e-mail real na VPS (depois de configurar a API key):
+```bash
+TEST_EMAIL=seu@email.com bash scripts/check-brevo.sh
+TEST_EMAIL=seu@email.com bash scripts/smoke-email.sh
+```
 
 ## Como o sorteio funciona
 
