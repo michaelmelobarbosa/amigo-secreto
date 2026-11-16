@@ -376,9 +376,10 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 ## 13. Pontos em aberto
 
 Nenhum ponto de decisão em aberto. O domínio/HTTPS foi aplicado e o deploy está em produção desde
-2026-11-15. As pendências restantes são operacionais ou de código (P9–P12, e-mail real, cópia
-off-site, restore completo, reboot e fluxo no navegador) e estão em
-[`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md) §8/§9 e em [`docs/IDEAS.md`](docs/IDEAS.md).
+2026-11-15. P9–P11 foram aplicadas; as pendências restantes são operacionais ou de código (P12 no
+template do Caddy, e-mail real, cópia off-site, restore completo, reboot e fluxo no navegador) e
+estão em [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md) §8/§9 e em
+[`docs/IDEAS.md`](docs/IDEAS.md).
 
 ## 14. Histórico de decisões
 
@@ -393,6 +394,7 @@ off-site, restore completo, reboot e fluxo no navegador) e estão em
 - 2026-11-15: rate limiting em memória implementado: `OncePerRequestFilter` por IP/categoria, janela fixa, mapa LRU, `429` + `Retry-After` e janela própria de 1 hora para sorteio. Validado em produção no mesmo dia, inclusive contra `X-Forwarded-For` forjado.
 - 2026-11-15: deploy endurecido: Postgres de dev em loopback, `mem_limit`/`cpus`, rotação de log, build ARM64 sem QEMU, imagem imutável no GHCR e Caddy desacoplado para um stack de borda externo (rede `edge`).
 - 2026-11-15: **deploy real concluído** em `https://amigo-secreto.barbosalabs.dev`: DNS A, Security List Oracle, stack `edge` com `edge-caddy-1`, imagem pública `2b6e2d4…`, Flyway V1–V3 e backup diário por **systemd timer** (a VPS não tem `cron`). Divergências e pendências (P9–P12) em [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
+- 2026-11-15: P9–P11 aplicadas: `db` com `mem_limit: 512m`/`cpus: "0.5"`, exemplos de `.env` com `BREVO_FROM_NAME="Amigo Secreto"` e `deploy.sh` validando o arquivo, e sessão só por cookie (`tracking-modes: cookie`) com teste. P12 (`mem_limit: 256m` do Caddy) ficou no template do stack de borda.
 
 ## 15. Fase 2 — e-mail (implementado)
 

@@ -12,9 +12,7 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 - **Regenerar o token individual** de um participante (revogar um link que vazou). Hoje só o `inviteCode` é regenerável.
 - **Log de auditoria** para apagar evento, refazer/reabrir sorteio e regenerar convite, sem registrar tokens.
 - **CSP com reporting** (`report-uri`/`report-to`) e revisão periódica dos headers.
-- **Sessão:** rotação de ID e expiração explícita; hoje o cookie é `HttpOnly`, `SameSite=Lax` e `Secure` por padrão.
-- **`;jsessionid` na URL (P11):** observado em requisição sem cookie. Corrigir com
-  `server.servlet.session.tracking-modes: cookie`.
+- **Sessão:** rotação de ID e expiração explícita; hoje o cookie é `HttpOnly`, `SameSite=Lax` e `Secure` por padrão, e a sessão é só por cookie (sem `;jsessionid` na URL).
 - **Proxy confiável:** o app não é exposto direto e só entra na rede `edge`, mas qualquer container
   dessa rede ainda alcança `amigo-app:8080` e pode forjar `X-Forwarded-*`. Isolamento mais forte
   exigiria firewall/rede fora do Compose.
@@ -26,12 +24,10 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 - **Dashboard em uma transação só:** hoje evento, participantes e grupos são lidos em transações separadas; numa corrida exata a tela pode mostrar estado misturado por um instante. Um `DashboardQuery` com `@Transactional(readOnly = true)` resolve.
 - **Postgres nos testes:** a suíte roda em H2 `MODE=PostgreSQL`. Falta um job de CI com Postgres/Testcontainers para validar locks, tipos e `ddl-auto=validate` no banco real.
 - **Testes de concorrência:** dois `draw` simultâneos, duas inscrições na última vaga, rollback do redraw/reopen, `firstViewedAt` concorrente.
-- **`db` sem `mem_limit` (P9):** o Postgres vê os ~11 GiB do host; o `INFRA-VPS.md` recomenda
-  `512m`. Aplicar no `docker-compose.prod.yml`.
-- **`.env.example`/`.env.prod.example` quebram o `source .env` (P10):** `BREVO_FROM_NAME=Amigo Secreto`
-  precisa de aspas (`"Amigo Secreto"`) nos dois arquivos. O erro real no deploy foi
-  `Secreto: command not found`.
-- **Caddy de borda sem `mem_limit` (P12, externo):** padronizar com `256m` no `/opt/edge/compose.yml`.
+- **P9/P10/P11 aplicadas em 2026-11-15:** `db` com `mem_limit: 512m`/`cpus: "0.5"`, exemplos de
+  `.env` com `BREVO_FROM_NAME="Amigo Secreto"` e sessão só por cookie (sem `;jsessionid`).
+- **P12 — Caddy de borda:** o template tem `mem_limit: 256m`; falta aplicar no
+  `/opt/edge/compose.yml` da VPS.
 - **Paginação/histórico:** o painel carrega todos os participantes (máximo 100), o que é suficiente no MVP.
 
 ## Produto
@@ -61,6 +57,6 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 - Caddy de borda é ponto único de falha para todos os sites; `restart: unless-stopped` mitiga, não elimina.
 - Backup só na VPS: cópia off-site ainda não existe; a perda da VPS leva o banco junto.
 - Qualquer container na rede `edge` alcança `amigo-app:8080` e pode forjar `X-Forwarded-*`; o banco está na rede privada.
-- `db` sem `mem_limit` (P9): um pico do Postgres compete com a app e com o Hermes.
+- `db` limitado a `mem_limit: 512m`: um pico do Postgres não compete com a app e com o Hermes.
 - Testes em H2: Flyway e `ddl-auto=validate` foram provados no Postgres real no deploy; o comportamento de locks sob concorrência ainda só tem cobertura H2.
 - CSS próprio em vez de Pico.css: o layout é funcional, mas o guia visual não é o Pico.

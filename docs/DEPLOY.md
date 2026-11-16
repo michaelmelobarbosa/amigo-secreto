@@ -416,10 +416,9 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
    > `.env` e `.env.*` estão no `.gitignore`; `.env.prod.example` é versionado e serve de modelo.
    >
    > **Atenção (P10):** valores com espaço exigem aspas. Use
-   > `BREVO_FROM_NAME="Amigo Secreto"`; sem aspas, `source .env` no `deploy.sh` quebra com
-   > `Secreto: command not found`. Os arquivos `.env.example` e `.env.prod.example` atuais ainda
-   > estão sem aspas — corrija no `.env` do servidor até os exemplos serem atualizados (ver
-   > [Pendências abertas](#pendências-abertas-após-o-deploy)).
+   > `BREVO_FROM_NAME="Amigo Secreto"`; sem aspas, `source .env` quebra com
+   > `Secreto: command not found`. Os dois exemplos já usam aspas e o `deploy.sh` valida o arquivo,
+   > normaliza CRLF/BOM e mostra uma mensagem clara. Se editar o `.env` no servidor, mantenha as aspas.
 
 3. **Conferir a rede de borda e o Caddy**
 
@@ -689,10 +688,10 @@ docker rm -f restore-test
   todos os containers. Aceito para operação single-tenant.
 - **HSTS com `includeSubDomains`** está ativo: subdomínios de `amigo-secreto.barbosalabs.dev` ficam
   presos em HTTPS. Hosts irmãos (`outro.barbosalabs.dev`) não são afetados.
-- **`db` sem `mem_limit` (P9).** Hoje o Postgres enxerga os ~11 GiB do host; o `INFRA-VPS.md`
-  recomenda `512m`. Ver [Pendências abertas](#pendências-abertas-após-o-deploy).
-- **`;jsessionid` na URL (P11).** Observado em requisição sem cookie; corrigir com
-  `server.servlet.session.tracking-modes: cookie` (ainda pendente).
+- **`db` limitado a 512m (P9).** O Postgres não vê mais os ~11 GiB do host; o limite é
+  `mem_limit: 512m` com `cpus: "0.5"`.
+- **Sessão apenas por cookie (P11).** `server.servlet.session.tracking-modes: cookie` remove o
+  `;jsessionid` das URLs; o `SessionTrackingIntegrationTest` cobre o comportamento.
 - **Caddy é ponto único de falha** para todos os sites da borda; `restart: unless-stopped` mitiga.
 - **Backup no mesmo disco** não protege contra perda da VPS; a cópia off-site está pendente.
 - **Qualquer container na rede `edge` alcança `amigo-app:8080`.** O Docker não tem firewall por
@@ -730,10 +729,10 @@ docker rm -f restore-test
 | `502 Bad Gateway` | `amigo-app` está `healthy`? A app está na rede `edge`? `docker compose -f docker-compose.prod.yml ps` |
 | `network edge not found` | a rede externa não existe; `docker network create edge` e suba o stack de borda |
 | `up` falha por variável vazia | `.env` ausente ou incompleto; rode `docker compose -f docker-compose.prod.yml config` |
-| `line NN: Secreto: command not found` no deploy | `BREVO_FROM_NAME` sem aspas quebra `source .env` (P10); use `BREVO_FROM_NAME="Amigo Secreto"` |
+| `line NN: Secreto: command not found` no deploy | **corrigido (P10)**: os exemplos usam `BREVO_FROM_NAME="Amigo Secreto"`; se reaparecer, use aspas no `.env` |
 | `crontab: command not found` | a VPS não tem cron; use o systemd timer de backup (ver [Backup](#backup)) |
-| `;jsessionid=` aparece na URL | falta `server.servlet.session.tracking-modes: cookie` (P11) |
-| `db` usando a RAM do host | falta `mem_limit` no `db` (P9); o ideal é `512m` |
+| `;jsessionid=` aparece na URL | **corrigido (P11)**: `tracking-modes: cookie`; se reaparecer, confira a configuração |
+| `db` usando a RAM do host | **corrigido (P9)**: `mem_limit: 512m` no `db`; confira o bloco no Compose |
 | `permission denied /var/run/docker.sock` | o grupo `docker` não vale na sessão; use `sg docker -c '...'` ou reabra a sessão |
 | Senha do banco mudou no `.env` | A senha só é aplicada na criação do volume; em banco existente, altere via `psql` |
 | `port is already allocated` | 80/443 pertencem ao Caddy do stack `edge`; a app não publica portas. 8080 do host é do Hermes |
@@ -762,14 +761,15 @@ O que continua **fora do repositório** está na seção
 
 ### Pendências abertas após o deploy
 
-Estas foram encontradas na execução real e **ainda não foram aplicadas** ao repositório:
+Estas foram encontradas na execução real. **P9–P11 foram aplicadas em 2026-11-15**; P12 foi
+incluída no template do stack de borda e depende de aplicação no `/opt/edge/compose.yml` da VPS.
 
-| # | Pendência | Onde | Ação sugerida |
+| # | Pendência | Onde | Estado / ação |
 | --- | --- | --- | --- |
-| **P9** | `db` sem limite de memória | `docker-compose.prod.yml` | `mem_limit: 512m` (e `cpus: "0.5"` opcional) |
-| **P10** | `.env.example`/`.env.prod.example` quebram `source .env` | ambos | `BREVO_FROM_NAME="Amigo Secreto"`; reforçar o aviso de aspas; opcional validar no `deploy.sh` |
-| **P11** | `;jsessionid` na URL quando não há cookie | `application.yaml` | `server.servlet.session.tracking-modes: cookie` |
-| **P12** | Caddy de borda sem `mem_limit` (opcional) | `/opt/edge/compose.yml` (externo) | `mem_limit: 256m` |
+| **P9** | `db` sem limite de memória | `docker-compose.prod.yml` | **aplicado**: `mem_limit: 512m` + `cpus: "0.5"` |
+| **P10** | `.env.example`/`.env.prod.example` quebram `source .env` | ambos | **aplicado**: `BREVO_FROM_NAME="Amigo Secreto"` nos dois; `deploy.sh` valida o `.env` |
+| **P11** | `;jsessionid` na URL quando não há cookie | `application.yaml` | **aplicado**: `tracking-modes: cookie` + `SessionTrackingIntegrationTest` |
+| **P12** | Caddy de borda sem `mem_limit` | `/opt/edge/compose.yml` (externo) | **template atualizado** com `256m`; falta aplicar na VPS |
 
 Detalhes e reprodução em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §8.
 
@@ -781,7 +781,7 @@ máquina. Evidências em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 - [x] Ambiente medido: Ubuntu 24.04.5, aarch64, 2 vCPU, 11 GiB, 28 GB livres.
 - [x] Portas 80/443 livres antes do Caddy.
 - [x] Docker 29.9.3 + Compose v5.7.1 instalados; `ubuntu` no grupo `docker`.
-- [x] P1–P6 aplicadas e suíte verde (159 testes).
+- [x] P1–P6 aplicadas e suíte verde (159 na execução; 160 após o teste de sessão).
 - [x] TCP 80, TCP 443 e UDP 443 liberados na Security List da Oracle.
 - [x] Rede `edge` + `/opt/edge` + `edge-caddy-1` de pé; certificado Let's Encrypt emitido.
 - [x] Imagem ARM64 pública no GHCR; nenhum `docker login` necessário.
@@ -818,7 +818,7 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | Cópia off-site do backup | ❌ | backup só na VPS |
 | Restore completo | ❌ | só `pg_restore --list` foi validado |
 | Reboot da VPS | ❌ | não testado |
-| Fluxo no navegador | ❌ | smoke HTTP + 159 testes; falta criar/sortear/apagar |
+| Fluxo no navegador | ❌ | smoke HTTP + 160 testes; falta criar/sortear/apagar |
 | Monitoração externa | ❌ | opcional |
 | `DOCKER-USER` restritivo | ❌ | opcional |
 | Clone raso | ❌ | `git fetch --unshallow` |
@@ -850,7 +850,11 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 - **Desvio consciente:** o site usa **hostname literal** em vez de `{$DOMAIN}`; um `.env` por stack
   não escala para N apps. Nova app = novo arquivo em `sites/` + `caddy reload`.
 - O Caddy é o único a publicar 80/443 e é ponto único de falha para todas as apps da VPS.
-- `mem_limit` do Caddy ainda não existe (P12, opcional).
+- O template do stack já traz `mem_limit: 256m`; confirme o mesmo no `/opt/edge/compose.yml` da VPS
+  (P12) e recrie o Caddy:
+  ```bash
+  cd /opt/edge && sudo docker compose -f compose.yml up -d caddy
+  ```
 
 ### 4. GitHub Container Registry (GHCR) (feito)
 
@@ -867,7 +871,8 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 - `DOMAIN=amigo-secreto.barbosalabs.dev`, `APP_IMAGE=ghcr.io/michaelmelobarbosa/amigo-secreto`,
   `APP_TAG=2b6e2d4…`, `EDGE_NETWORK=edge`.
 - `RATE_LIMIT_*` com os padrões e `EMAIL_ENABLED=false` no primeiro deploy.
-- **P10:** `BREVO_FROM_NAME="Amigo Secreto"` com aspas; sem aspas o `source .env` quebra.
+- **P10:** os exemplos já usam `BREVO_FROM_NAME="Amigo Secreto"`; confirme o mesmo no `.env` do
+  servidor. O `deploy.sh` valida o arquivo antes de carregar.
 
 ### 6. Brevo (fase 2) (pendente)
 
@@ -894,7 +899,7 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
   `DOCKER-USER` no topo, HTTPS 200 e `systemctl list-timers`.
 - Criar um evento real de teste pelo navegador e apagar depois (o banco está em 0 eventos).
 - Configurar monitoração externa (ex.: Uptime Kuma/healthchecks.io) apontando para `/`.
-- Opcional: aplicar a regra restritiva em `DOCKER-USER` (D6) e `mem_limit` no Caddy (P12).
+- Aplicar `mem_limit: 256m` no Caddy do `/opt/edge/compose.yml` (P12) e recriar o serviço.
 - `git fetch --unshallow` se precisar de histórico/rollback por commit.
 - `docker rmi hello-world alpine:3.20` para limpar as imagens de teste.
 - Opcional: CD com `appleboy/ssh-action` rodando `scripts/deploy.sh` com `APP_TAG=$GITHUB_SHA`.
@@ -915,6 +920,6 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | Deploy automatizado (CD) | ❌ | opcional |
 | Atualização de imagens base | ❌ | `docker compose pull` periódico; avaliar fixar digest |
 
-**Pendências de código/configuração** (P9–P12) estão em
-[Pendências abertas](#pendências-abertas-após-o-deploy). A suíte de 159 testes e o smoke HTTP de
-2026-11-15 cobrem o fluxo funcional em nível de aplicação, mas não substituem o teste no navegador.
+**Pendências de código/configuração:** P9–P11 aplicadas; P12 (Caddy `mem_limit`) está no template
+externo e falta aplicar na VPS. A suíte de **160 testes** e o smoke HTTP de 2026-11-15 cobrem o fluxo
+funcional em nível de aplicação, mas não substituem o teste no navegador.
