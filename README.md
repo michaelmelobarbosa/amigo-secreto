@@ -2,7 +2,7 @@
 
 Aplicação web para organizar amigo secreto **sem login**, com acesso por links que carregam tokens. Serve para uso real (família e trabalho) e como projeto de portfólio, com deploy em VPS própria.
 
-> **Status:** em produção em `https://amigo-secreto.barbosalabs.dev` desde 2026-11-15. MVP funcional com e-mail na fase 2 e rate limiting em memória. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica, envio do link por Brevo e limite de requisições por IP implementados. **159 testes** passando.
+> **Status:** em produção em `https://amigo-secreto.barbosalabs.dev` desde 2026-11-15. MVP funcional com e-mail na fase 2 e rate limiting em memória. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica, envio do link por Brevo e limite de requisições por IP implementados. **160 testes** passando.
 
 ## Funcionalidades
 
@@ -25,7 +25,7 @@ Aplicação web para organizar amigo secreto **sem login**, com acesso por links
 - Token inválido retorna **404**, sem confirmar existência.
 - CSRF próprio por token de sessão em todos os POSTs (não há Spring Security).
 - Rate limiting em memória por IP em `POST /events`, `/join`, `draw`/`redraw` e wishlist, com `429` + `Retry-After` ([plano e limites](docs/RATE-LIMITING.md)). Validado em produção em 2026-11-15, inclusive contra `X-Forwarded-For` forjado.
-- Cookie de sessão `HttpOnly` + `SameSite=Lax`; `Secure` por padrão (o perfil `dev` desativa para HTTP local).
+- Cookie de sessão `HttpOnly` + `SameSite=Lax`; `Secure` por padrão (o perfil `dev` desativa para HTTP local). A sessão é **só por cookie** (`tracking-modes=cookie`), sem `;jsessionid` na URL.
 - Rotas sensíveis com `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Content-Type-Options`, `X-Frame-Options`, CSP e `X-Robots-Tag`.
 - `robots.txt` bloqueia indexação.
 - Quem tem acesso direto ao banco vê os `Assignment` em claro. É um risco aceito do MVP; detalhes em [docs/IDEAS.md](docs/IDEAS.md).

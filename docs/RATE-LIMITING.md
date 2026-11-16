@@ -151,7 +151,7 @@ debug temporário, sem IP) que o balde é o do cliente real.
 - IPv4, IPv6 e IPv6 mapeado (`::ffff:1.2.3.4`) são normalizados corretamente.
 - Mapa não cresce sem limite (teste unitário com `maxKeys` pequeno).
 - 429 não contém token, IP nem detalhe interno.
-- Suíte existente continua verde (159 testes).
+- Suíte existente continua verde (160 testes).
 
 ## 7. Checklist de execução
 
