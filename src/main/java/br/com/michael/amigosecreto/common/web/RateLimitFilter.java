@@ -40,6 +40,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Pattern JOIN_PATH = Pattern.compile("^/join/[^/]+$");
     private static final Pattern DRAW_PATH = Pattern.compile("^/admin/[^/]+/(?:draw|redraw)$");
+    private static final Pattern EMAIL_LINKS_PATH = Pattern.compile("^/admin/[^/]+/links/email$");
+    private static final Pattern EMAIL_RESEND_PATH =
+            Pattern.compile("^/admin/[^/]+/participants/[^/]+/email/resend$");
     private static final Pattern WISHLIST_PATH = Pattern.compile("^/p/[^/]+/wishlist$");
 
     private static final String TOO_MANY_REQUESTS_BODY = """
@@ -125,6 +128,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
         if (DRAW_PATH.matcher(path).matches()) {
             return Category.DRAW;
+        }
+        if (EMAIL_LINKS_PATH.matcher(path).matches()) {
+            return Category.EMAIL_LINKS;
+        }
+        if (EMAIL_RESEND_PATH.matcher(path).matches()) {
+            return Category.EMAIL_RESEND;
         }
         if (WISHLIST_PATH.matcher(path).matches()) {
             return Category.WISHLIST;
@@ -243,6 +252,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         EVENT_CREATE,
         JOIN,
         DRAW,
+        EMAIL_LINKS,
+        EMAIL_RESEND,
         WISHLIST;
 
         int limit(RateLimitProperties properties) {
@@ -250,12 +261,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 case EVENT_CREATE -> properties.eventCreatePerWindow();
                 case JOIN -> properties.joinPerWindow();
                 case DRAW -> properties.drawPerWindow();
+                case EMAIL_LINKS -> properties.emailLinksPerWindow();
+                case EMAIL_RESEND -> properties.emailResendPerWindow();
                 case WISHLIST -> properties.wishlistPerWindow();
             };
         }
 
         Duration window(RateLimitProperties properties) {
-            return this == DRAW ? properties.drawWindow() : properties.window();
+            return switch (this) {
+                case DRAW -> properties.drawWindow();
+                case EMAIL_LINKS, EMAIL_RESEND -> properties.emailWindow();
+                default -> properties.window();
+            };
         }
     }
 

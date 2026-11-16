@@ -237,7 +237,7 @@ Use POST para remoções (formulários HTML não têm DELETE) e proteja contra C
 - Rotas `/p/**`, `/join/**` e `/admin/**` com `Cache-Control: no-store` e `Referrer-Policy: no-referrer`, para o token não vazar para terceiros. Os headers de segurança também cobrem `/` e `/events` (o redirect de criação carrega o token do painel).
 - `robots.txt` bloqueia indexação; CSP restritiva (`script-src 'self'`, `frame-ancestors 'none'`); `X-Content-Type-Options`, `X-Frame-Options` e `X-Robots-Tag` nas rotas sensíveis.
 - Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` por padrão. O perfil `dev` desativa `Secure` para rodar em HTTP local; produção exige HTTPS.
-- O convite é público: limite de tamanho nos campos, teto de participantes por evento e rate limiting por IP em `POST /events` (5/10 min), `POST /join/{inviteCode}` (30/10 min), `draw`/`redraw` (10/h) e wishlist (30/10 min), em memória, com `429` + `Retry-After`. **Validado em produção em 2026-11-15**, inclusive contra `X-Forwarded-For` forjado. Os endpoints de e-mail do painel (`links/email` e `email/resend`) **ainda não têm rate limit** (P13). Ver [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
+- O convite é público: limite de tamanho nos campos, teto de participantes por evento e rate limiting por IP em `POST /events` (5/10 min), `POST /join/{inviteCode}` (30/10 min), `draw`/`redraw` (10/h), wishlist (30/10 min) e endpoints de e-mail (`links/email` 10/h, `email/resend` 20/h), em memória, com `429` + `Retry-After`. **Validado em produção em 2026-11-15** (e-mail em 2026-11-16), inclusive contra `X-Forwarded-For` forjado. O rate limit dos endpoints de e-mail está no código e entra em produção com o próximo deploy. Ver [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - Validação de entrada com Bean Validation e escape automático do Thymeleaf contra XSS. Proteção CSRF com token de sessão próprio em todos os POSTs.
 - Apagar evento exige CSRF e confirmação explícita; a operação é irreversível.
 - Segredos (senha do banco) em variáveis de ambiente, fora do repositório.
@@ -349,7 +349,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 
 ## 11. Fora do MVP (registrar em `docs/IDEAS.md`)
 
-- E-mail transacional (fase 2): link individual após o sorteio/refazer, e-mail opcional, Brevo, domínio/SPF/DKIM/DMARC, retentativas e status de entrega. **Implementado, ligado e validado ponta a ponta em 2026-11-16**; faltam SPF e rate limit dos endpoints de e-mail. Detalhes na seção 15.
+- E-mail transacional (fase 2): link individual após o sorteio/refazer, e-mail opcional, Brevo, domínio/SPF/DKIM/DMARC, retentativas e status de entrega. **Implementado, ligado e validado ponta a ponta em 2026-11-16**; SPF publicado e rate limit dos endpoints de e-mail no código (entra com o próximo deploy). Detalhes na seção 15.
 - Telefone/WhatsApp Cloud API/SMS/Telegram como canal automatizado. O MVP mantém o `wa.me` manual; WhatsApp API é paga para mensagens utility iniciadas pelo negócio e SMS é pago.
 - Recuperação de link por e-mail e double opt-in (avaliar depois da fase 2).
 - Rate limiting por IP em `/events`, `/join` e sorteio, **implementado e validado em produção em 2026-11-15**. Limite diário, Redis e WAF continuam fora. Plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
@@ -376,11 +376,11 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 ## 13. Pontos em aberto
 
 Nenhum ponto de decisão em aberto. O domínio/HTTPS foi aplicado e o deploy está em produção desde
-2026-11-15. P9–P11 foram aplicadas e o e-mail foi ligado/validado em 2026-11-16. As pendências
-restantes são operacionais ou de código: P12 (Caddy no template), P13 (rate limit dos endpoints de
-e-mail), P14 (SPF), P15 (deploy da imagem do commit novo), cópia off-site, restore completo, reboot e
-fluxo no navegador. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md) §8/§9/§14 e
-[`docs/IDEAS.md`](docs/IDEAS.md).
+2026-11-15. P9–P11 foram aplicadas, o e-mail foi ligado/validado em 2026-11-16, e o SPF e o rate
+limit dos endpoints de e-mail foram aplicados no mesmo dia. As pendências restantes são operacionais
+ou de código: P12 (Caddy no template), P15 (deploy da imagem do commit novo), cópia off-site, restore
+completo, reboot e fluxo no navegador. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md)
+§8/§9/§14 e [`docs/IDEAS.md`](docs/IDEAS.md).
 
 ## 14. Histórico de decisões
 
@@ -396,13 +396,13 @@ fluxo no navegador. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md) �
 - 2026-11-15: deploy endurecido: Postgres de dev em loopback, `mem_limit`/`cpus`, rotação de log, build ARM64 sem QEMU, imagem imutável no GHCR e Caddy desacoplado para um stack de borda externo (rede `edge`).
 - 2026-11-15: **deploy real concluído** em `https://amigo-secreto.barbosalabs.dev`: DNS A, Security List Oracle, stack `edge` com `edge-caddy-1`, imagem pública `2b6e2d4…`, Flyway V1–V3 e backup diário por **systemd timer** (a VPS não tem `cron`). Divergências e pendências (P9–P12) em [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
 - 2026-11-15: P9–P11 aplicadas: `db` com `mem_limit: 512m`/`cpus: "0.5"`, exemplos de `.env` com `BREVO_FROM_NAME="Amigo Secreto"` e `deploy.sh` validando o arquivo, e sessão só por cookie (`tracking-modes: cookie`) com teste. P12 (`mem_limit: 256m` do Caddy) ficou no template do stack de borda.
-- 2026-11-16: e-mail real ligado e validado ponta a ponta em produção: chave restrita a envio, `.env` com `EMAIL_ENABLED=true`/`BREVO_SANDBOX=false`, 2 notificações `SENT` (`attempts=1`), painel **Enviado**, zero erros e evento de teste apagado. Pendentes: SPF (P14), rate limit dos endpoints de e-mail (P13) e deploy da imagem do commit novo (P15).
+- 2026-11-16: e-mail real ligado e validado ponta a ponta em produção: chave restrita a envio, `.env` com `EMAIL_ENABLED=true`/`BREVO_SANDBOX=false`, 2 notificações `SENT` (`attempts=1`), painel **Enviado**, zero erros e evento de teste apagado. SPF publicado e rate limit dos endpoints de e-mail implementado no código no mesmo dia; pendente: deploy da imagem do commit novo (P15), que leva o rate limit.
 
 ## 15. Fase 2 — e-mail (implementado)
 
 Guia operacional detalhado: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
 
-A fase 2 está implementada: o e-mail é um canal **opcional** de entrega do link individual, nunca credencial e nunca obrigatório. O caminho manual (`wa.me` e copiar link) continua funcionando. O envio real depende de `EMAIL_ENABLED=true`, `BREVO_SANDBOX=false` e da API key de produção no ambiente. **Em 2026-11-16 o e-mail foi ligado e validado ponta a ponta**: 2 notificações `SENT`, `attempts=1`, painel **Enviado**, zero erros e evento de teste apagado. A chave de produção é restrita a envio (`GET /v3/account` → 403 é esperado). O IP de saída da VPS é `<VPS_PUBLIC_IP>`; o SPF do subdomínio de envio e o rate limit dos endpoints de e-mail ainda estão pendentes.
+A fase 2 está implementada: o e-mail é um canal **opcional** de entrega do link individual, nunca credencial e nunca obrigatório. O caminho manual (`wa.me` e copiar link) continua funcionando. O envio real depende de `EMAIL_ENABLED=true`, `BREVO_SANDBOX=false` e da API key de produção no ambiente. **Em 2026-11-16 o e-mail foi ligado e validado ponta a ponta**: 2 notificações `SENT`, `attempts=1`, painel **Enviado**, zero erros e evento de teste apagado. A chave de produção é restrita a envio (`GET /v3/account` → 403 é esperado). O IP de saída da VPS é `<VPS_PUBLIC_IP>`; o SPF foi publicado e verificado, e o rate limit dos endpoints de e-mail (10/h e 20/h) está no código, entrando em produção com o próximo deploy.
 
 ### O que ficou preparado antes da fase 2
 

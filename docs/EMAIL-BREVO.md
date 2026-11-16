@@ -1,6 +1,6 @@
 # Fase 2 — e-mail com Brevo
 
-Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e **em produção, ligado e validado ponta a ponta em 2026-11-16**: 2 notificações `SENT` com `attempts=1`, painel exibindo **Enviado**, sem erro/retentativa, e evento de teste apagado. A chave de produção é restrita a envio (`GET /v3/account` → 403 é esperado). Pendências: **SPF** no subdomínio de envio e **rate limit** nos endpoints de e-mail do painel; webhooks/double opt-in são opcionais.
+Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e **em produção, ligado e validado ponta a ponta em 2026-11-16**: 2 notificações `SENT` com `attempts=1`, painel exibindo **Enviado**, sem erro/retentativa, e evento de teste apagado. A chave de produção é restrita a envio (`GET /v3/account` → 403 é esperado). O SPF foi publicado em 2026-11-16. Os endpoints de e-mail têm rate limit no código (10/h e 20/h), que entra em produção com o próximo deploy; webhooks/double opt-in são opcionais.
 
 ## 1. Decisão de arquitetura
 
@@ -57,9 +57,9 @@ Passos:
 5. Clique em **Authenticate this email domain** e aguarde a propagação (pode levar até 48h).
 6. Crie o remetente em **Senders** com o endereço exato do domínio autenticado. O `From` tem que ser do domínio autenticado; se autenticou `mail.exemplo.com`, não envie de `@exemplo.com`.
 
-> **Estado em 2026-11-16:** Brevo code, DKIM (`brevo1`/`brevo2`) e DMARC estão publicados; **falta o
-> SPF** em `mail.barbosalabs.dev`. A entrega funciona por DKIM/DMARC (foi validada em produção), mas
-> sem SPF a reputação fica mais frágil. Crie o TXT acima e confirme no Brevo.
+> **Estado em 2026-11-16:** Brevo code, DKIM (`brevo1`/`brevo2`), DMARC e **SPF** estão publicados
+> em `mail.barbosalabs.dev`. O SPF (`v=spf1 include:spf.sendinblue.com -all`) foi verificado no DNS
+> público no mesmo dia; o `brevo-code` continua no mesmo nome, como segundo TXT.
 
 ### 2.3 Credenciais
 
@@ -439,18 +439,19 @@ Se aparecer “O envio de e-mail está desativado”, o `.env` ainda está com `
 aparecer “Links aceitos em modo sandbox”, `BREVO_SANDBOX=true` e nada foi entregue.
 
 > O teste de produção de 2026-11-16 foi feito via API/UI porque os scripts ainda **não estavam no
-> remoto**. Eles estão no working tree deste repositório e precisam entrar no próximo commit/deploy.
+> remoto** naquele momento. Eles já foram adicionados ao repositório e podem ser usados na VPS após o
+> deploy do commit que os contém.
 
 **Fluxo completo do sorteio:** crie um evento, adicione um participante com e-mail, sorteie e confira
 o status **Enviado** no painel e o **Transactional Logs** do Brevo. O worker roda a cada 30s; o painel
 mostra `Pendente`, `Enviado`, `Falhou` ou `Ignorado`, e `notification.last_error` guarda o erro do
 provedor. Esse é o teste que cobre outbox + worker, além do adaptador.
 
-> **Cota e abuso (prioridade):** o plano grátis tem 300 e-mails/dia. Um sorteio de 100 participantes
-> usa 100; cada refazer usa mais 100 — dois refazeres no mesmo dia estouram a cota. Com o e-mail
-> ligado, os endpoints `POST /admin/{token}/links/email` e
-> `POST /admin/{token}/participants/{id}/email/resend` **ainda não têm rate limit**; eles podem
-> queimar a cota e a reputação do domínio. Esse é o próximo item de segurança.
+> **Cota e abuso:** o plano grátis tem 300 e-mails/dia. Um sorteio de 100 participantes usa 100;
+> cada refazer usa mais 100 — dois refazeres no mesmo dia estouram a cota. Os endpoints
+> `POST /admin/{token}/links/email` (10/h) e `POST /admin/{token}/participants/{id}/email/resend`
+> (20/h) têm rate limit no código, que entra em produção com P15; a cota diária em si ainda não tem
+> um teto separado.
 
 ## 9. Checklist de implementação
 
@@ -471,8 +472,8 @@ provedor. Esse é o teste que cobre outbox + worker, além do adaptador.
 - [x] E-mail habilitado em produção (`EMAIL_ENABLED=true`, `BREVO_SANDBOX=false`, worker ativo).
 - [x] Teste ponta a ponta com 2 participantes: `SENT`, `attempts=1`, painel **Enviado**, zero erros; evento de teste apagado.
 - [ ] Confirmar se a chave usada é separada da de dev (recomendado).
-- [ ] Criar o SPF de `mail.barbosalabs.dev` no DNS (DKIM/DMARC já estão corretos).
-- [ ] Rate limit em `POST /admin/{token}/links/email` e `.../participants/{id}/email/resend`.
+- [x] SPF de `mail.barbosalabs.dev` publicado em 2026-11-16 (`v=spf1 include:spf.sendinblue.com -all`) e verificado no DNS público.
+- [x] Rate limit em `POST /admin/{token}/links/email` (10/h) e `.../participants/{id}/email/resend` (20/h) implementado no código em 2026-11-16; entra em produção com P15.
 - [ ] Opcional: webhooks de delivered/bounce e double opt-in.
 
 ## 10. Decisões que ainda podem ser tomadas
