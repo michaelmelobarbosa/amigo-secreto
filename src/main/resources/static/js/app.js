@@ -24,46 +24,129 @@ document.addEventListener('click', async (event) => {
             document.body.removeChild(input);
         }
 
-        const original = button.textContent;
-        button.textContent = 'Copiado!';
+        const status = document.querySelector('[data-copy-status]');
+        if (status) {
+            status.textContent = '';
+            window.requestAnimationFrame(() => {
+                status.textContent = 'Link copiado.';
+            });
+        }
+
+        const originalText = button.textContent;
+        const originalLabel = button.getAttribute('aria-label');
+        const originalTitle = button.getAttribute('title');
+        const usesIcon = button.querySelector('.icon-check') !== null;
+
+        if (usesIcon) {
+            button.classList.add('is-copied');
+            button.setAttribute('aria-label', 'Copiado!');
+            if (originalTitle !== null) {
+                button.setAttribute('title', 'Copiado!');
+            }
+        } else {
+            button.textContent = 'Copiado!';
+        }
+
         window.setTimeout(() => {
-            button.textContent = original;
+            if (usesIcon) {
+                button.classList.remove('is-copied');
+                if (originalLabel === null) {
+                    button.removeAttribute('aria-label');
+                } else {
+                    button.setAttribute('aria-label', originalLabel);
+                }
+                if (originalTitle !== null) {
+                    button.setAttribute('title', originalTitle);
+                }
+            } else {
+                button.textContent = originalText;
+            }
         }, 1500);
     } catch (error) {
         window.prompt('Copie o link manualmente:', value);
     }
 });
 
-const linksGuard = document.querySelector('[data-links-guard="true"]');
-if (linksGuard) {
-    let acknowledged = false;
+const organizerAccess = document.querySelector('#organizer-access');
+const leaveDialog = document.querySelector('#leave-links-dialog');
+let linksSaved = false;
 
-    const acknowledge = (event) => {
-        acknowledged = true;
-        const target = event.currentTarget;
-        if (target instanceof HTMLElement && target.hasAttribute('data-links-ack')) {
-            target.textContent = 'Aviso desativado';
-            target.setAttribute('disabled', 'disabled');
-        }
-    };
+const markLinksSaved = (event) => {
+    linksSaved = true;
+    const target = event.currentTarget;
+    if (target instanceof HTMLElement && target.hasAttribute('data-links-ack')) {
+        target.textContent = 'Aviso desativado';
+        target.setAttribute('disabled', 'disabled');
+    }
+};
 
-    linksGuard.querySelectorAll('[data-links-saved]').forEach((element) => {
-        element.addEventListener('click', acknowledge);
+if (organizerAccess) {
+    organizerAccess.querySelectorAll('[data-links-saved]').forEach((element) => {
+        element.addEventListener('click', markLinksSaved);
     });
 
-    linksGuard.querySelectorAll('form').forEach((form) => {
+    organizerAccess.querySelectorAll('form').forEach((form) => {
         form.addEventListener('submit', () => {
-            acknowledged = true;
+            linksSaved = true;
         });
     });
+}
 
+const linksGuard = document.querySelector('[data-links-guard="true"]');
+if (linksGuard) {
     window.addEventListener('beforeunload', (event) => {
-        if (acknowledged) {
+        if (linksSaved) {
             return;
         }
         event.preventDefault();
         event.returnValue = '';
     });
+}
+
+if (leaveDialog) {
+    let pendingHomeUrl = null;
+
+    const openLeaveDialog = (homeUrl) => {
+        pendingHomeUrl = homeUrl;
+        if (typeof leaveDialog.showModal !== 'function') {
+            if (window.confirm('Se você ainda não salvou os links, vai perdê-los ao sair. Continuar?')) {
+                linksSaved = true;
+                window.location.href = homeUrl;
+            }
+            return;
+        }
+        if (!leaveDialog.open) {
+            leaveDialog.showModal();
+        }
+    };
+
+    document.querySelectorAll('[data-nav-home]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            if (linksSaved || event.defaultPrevented || event.button !== 0
+                    || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            event.preventDefault();
+            openLeaveDialog(link.href);
+        });
+    });
+
+    const cancelButton = leaveDialog.querySelector('[data-dialog-cancel]');
+    if (cancelButton) {
+        cancelButton.addEventListener('click', () => leaveDialog.close());
+    }
+
+    const confirmButton = leaveDialog.querySelector('[data-dialog-confirm]');
+    if (confirmButton) {
+        confirmButton.addEventListener('click', () => {
+            const destination = pendingHomeUrl;
+            linksSaved = true;
+            leaveDialog.close();
+            if (destination) {
+                window.location.href = destination;
+            }
+        });
+    }
 }
 
 document.addEventListener('submit', (event) => {

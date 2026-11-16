@@ -2,7 +2,7 @@
 <html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments/common :: head('Painel do organizador')}"></head>
 <body>
-<header th:replace="~{fragments/common :: nav}"></header>
+<header th:replace="~{fragments/common :: nav(${event.eventName})}"></header>
 
 <main class="container content" id="conteudo">
     <div class="alert alert-success" role="status" th:if="${created}">
@@ -19,25 +19,60 @@
             este evento. Copie, baixe o TXT ou envie para o seu e-mail agora.
         </p>
         <div class="link-row">
-            <span class="link-label">Painel</span>
+            <span class="link-label">Painel Geral</span>
             <code th:text="${links.adminUrl}">/admin/...</code>
-            <button class="button secondary" type="button" th:attr="data-copy=${links.adminUrl}"
-                    data-links-saved>Copiar</button>
+            <div class="link-actions">
+                <button class="button secondary icon-button" type="button" th:attr="data-copy=${links.adminUrl}"
+                        aria-label="Copiar link do painel geral" title="Copiar link do painel geral"
+                        data-links-saved>
+                    <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                    <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                </button>
+            </div>
+            <p class="muted">Este é o link do painel geral. Guarde-o e não compartilhe: ele dá acesso à gestão do evento.</p>
         </div>
         <div class="link-row">
             <span class="link-label">Você como participante</span>
             <code th:text="${links.organizerUrl}">/p/...</code>
-            <button class="button secondary" type="button" th:attr="data-copy=${links.organizerUrl}">Copiar</button>
-            <a class="button secondary" th:href="${links.organizerWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <div class="link-actions">
+                <button class="button secondary icon-button" type="button" th:attr="data-copy=${links.organizerUrl}"
+                        aria-label="Copiar seu link de participante" title="Copiar seu link de participante">
+                    <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                    <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                </button>
+                <a class="button secondary icon-button" th:href="${links.organizerWhatsappUrl}"
+                   target="_blank" rel="noopener noreferrer"
+                   aria-label="Enviar seu link de participante pelo WhatsApp"
+                   title="Enviar seu link de participante pelo WhatsApp">
+                    <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
+                </a>
+            </div>
+            <p class="muted">Este link mostra apenas o seu resultado. O painel não exibe quem tirou quem.</p>
         </div>
         <div class="link-row">
-            <span class="link-label">Convite</span>
+            <span class="link-label">Convite Geral</span>
             <code th:text="${links.inviteUrl}">/join/...</code>
-            <button class="button secondary" type="button" th:attr="data-copy=${links.inviteUrl}">Copiar</button>
-            <a class="button secondary" th:href="${links.inviteWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <div class="link-actions">
+                <button class="button secondary icon-button" type="button" th:attr="data-copy=${links.inviteUrl}"
+                        aria-label="Copiar convite geral" title="Copiar convite geral">
+                    <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                    <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                </button>
+                <a class="button secondary icon-button" th:href="${links.inviteWhatsappUrl}"
+                   target="_blank" rel="noopener noreferrer"
+                   aria-label="Enviar convite geral pelo WhatsApp"
+                   title="Enviar convite geral pelo WhatsApp">
+                    <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
+                </a>
+            </div>
+            <p class="muted">Envie o convite geral para cada pessoa no privado. O convite não mostra a lista de participantes.</p>
         </div>
 
-        <div class="row-actions">
+        <div class="action-grid">
+            <form th:action="@{/admin/{token}/invite/regenerate(token=${adminToken})}" method="post">
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <button class="button secondary" type="submit">Gerar novo link de convite</button>
+            </form>
             <a class="button secondary" th:href="@{/admin/{token}/links.txt(token=${adminToken})}"
                download="amigo-secreto-links.txt" data-links-saved>Baixar links (.txt)</a>
             <button class="button secondary" type="button" th:if="${created}"
@@ -45,7 +80,7 @@
         </div>
 
         <div class="subsection">
-            <h3>Enviar por e-mail</h3>
+            <h3>Enviar seus links por e-mail</h3>
             <p class="muted">O endereço é usado só neste envio e não fica salvo no evento.</p>
             <form th:action="@{/admin/{token}/links/email(token=${adminToken})}"
                   th:object="${sendLinksForm}" method="post">
@@ -89,16 +124,7 @@
                 <dd th:text="${event.drawCount}">0</dd>
             </div>
         </dl>
-    </section>
 
-    <section class="card">
-        <h2>Link de convite</h2>
-        <p class="muted">Envie para cada pessoa no privado. O convite não mostra a lista de participantes.</p>
-        <div class="link-row">
-            <code th:text="${event.inviteUrl}">/join/...</code>
-            <button class="button secondary" type="button" th:attr="data-copy=${event.inviteUrl}">Copiar</button>
-            <a class="button secondary" th:href="${event.inviteWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-        </div>
         <div class="row-actions" th:if="${event.canEdit}">
             <form th:action="@{/admin/{token}/registration(token=${adminToken})}" method="post">
                 <div th:replace="~{fragments/common :: csrf}"></div>
@@ -107,10 +133,6 @@
                         th:text="${event.registrationOpen ? 'Encerrar inscrições' : 'Abrir inscrições'}">Encerrar inscrições</button>
             </form>
         </div>
-        <form th:action="@{/admin/{token}/invite/regenerate(token=${adminToken})}" method="post">
-            <div th:replace="~{fragments/common :: csrf}"></div>
-            <button class="button secondary" type="submit">Gerar novo link de convite</button>
-        </form>
         <p class="muted" th:if="${event.canEdit and !event.registrationOpen}">As inscrições estão encerradas; você pode reabri-las enquanto o evento não for sorteado.</p>
     </section>
 
@@ -152,8 +174,16 @@
                     </td>
                     <td>
                         <div class="row-actions">
-                            <button class="button secondary" type="button" th:attr="data-copy=${row.participantUrl}">Copiar</button>
-                            <a class="button secondary" th:href="${row.whatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+                            <button class="button secondary icon-button" type="button"
+                                    th:attr="data-copy=${row.participantUrl},aria-label=${'Copiar link de ' + row.name},title=${'Copiar link de ' + row.name}">
+                                <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                                <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                            </button>
+                            <a class="button secondary icon-button" th:href="${row.whatsappUrl}"
+                               target="_blank" rel="noopener noreferrer"
+                               th:attr="aria-label=${'Enviar link de ' + row.name + ' pelo WhatsApp'},title=${'Enviar link de ' + row.name + ' pelo WhatsApp'}">
+                                <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
+                            </a>
                         </div>
                     </td>
                     <td th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</td>
@@ -288,16 +318,6 @@
         </div>
     </section>
 
-    <section class="card">
-        <h2>Seu link como participante</h2>
-        <p class="muted">Este link mostra apenas o seu resultado. O painel não exibe quem tirou quem.</p>
-        <div class="link-row">
-            <code th:text="${event.organizerParticipantUrl}">/p/...</code>
-            <button class="button secondary" type="button" th:attr="data-copy=${event.organizerParticipantUrl}">Copiar</button>
-            <a class="button secondary" th:href="${event.organizerWhatsappUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-        </div>
-    </section>
-
     <section class="card danger-zone">
         <h2>Apagar evento</h2>
         <p class="muted">Remove participantes, grupos e resultados. Não dá para desfazer.</p>
@@ -308,6 +328,18 @@
         </form>
     </section>
 </main>
+
+<dialog id="leave-links-dialog" class="confirm-dialog" aria-labelledby="leave-links-title">
+    <h2 id="leave-links-title">Sair sem salvar os links?</h2>
+    <p>
+        Se você ainda não copiou ou baixou os links, vai perder o acesso a este painel.
+        O link do painel é a única forma de voltar.
+    </p>
+    <div class="dialog-actions">
+        <button class="button secondary" type="button" data-dialog-cancel>Ficar e salvar</button>
+        <button class="button danger" type="button" data-dialog-confirm>Continuar e sair</button>
+    </div>
+</dialog>
 
 <footer th:replace="~{fragments/common :: footer}"></footer>
 <div th:replace="~{fragments/common :: scripts}"></div>
