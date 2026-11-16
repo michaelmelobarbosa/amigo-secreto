@@ -4,9 +4,13 @@ Guia de operação em VPS Linux: Docker Compose (`app` + PostgreSQL) publicado p
 borda externo** com TLS automático. O Postgres e a aplicação **não** publicam portas no host; só o
 Caddy, em um stack separado, fica exposto.
 
-> **Origem das informações sobre a VPS.** O levantamento de hardware, sistema, portas e firewall foi
-> feito pelo **Hermes**, agente instalado na própria VPS, em 2026-11-14, e cruzado com o repositório.
-> Onde o dado não pôde ser confirmado por comando, está marcado com **⚠️ confirmar**.
+> **Execução real.** O primeiro deploy foi concluído em **2026-11-15** e está registrado em
+> [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md), com evidências, arquivos externos e pendências.
+> Este documento continua sendo o guia reproduzível; onde divergir do registro de execução, vale o
+> registro.
+>
+> **Origem das informações sobre a VPS.** O levantamento inicial foi feito pelo **Hermes** em
+> 2026-11-14 e confirmado na execução de 2026-11-15. Os valores de ambiente abaixo são medidos.
 
 > **Documento complementar.** O Caddy foi desacoplado deste projeto: ele vive em um stack `edge`
 > compartilhado, que roteia esta e outras aplicações. A topologia, os arquivos do stack de borda e a
@@ -29,21 +33,25 @@ Caddy, em um stack separado, fica exposto.
 - [Notas de segurança](#notas-de-segurança)
 - [Problemas comuns](#problemas-comuns)
 - [Pendências de deploy aplicadas](#pendências-de-deploy-aplicadas-2026-11-15)
-- [Checklist para quem for configurar a VPS](#checklist-para-quem-for-configurar-a-vps)
+- [Checklist de aceite](#checklist-de-aceite-executado-em-2026-11-15)
 - [O que configurar fora do projeto](#o-que-configurar-fora-do-projeto)
 - [O que ainda não foi validado](#o-que-ainda-não-foi-validado)
 
 ## Resumo executivo
 
+- **Deploy executado em 2026-11-15:** `https://amigo-secreto.barbosalabs.dev` no ar com TLS
+  Let's Encrypt, Flyway V1–V3 aplicado em Postgres 17 e backup diário por systemd timer. Registro
+  completo em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 - **Dois containers neste projeto**: `db` (Postgres 17) e `app` (Spring Boot). O Caddy é um
   **stack de borda separado**, compartilhado com outras aplicações da VPS; o porquê está em
   [Decisões](#decisões-de-arquitetura-com-justificativa) e em [`INFRA-VPS.md`](./INFRA-VPS.md).
 - **Nenhum container deste projeto publica portas.** `app` usa `expose: 8080` e `db` não tem
   `ports`. Só o Caddy do stack `edge` publica `80/tcp`, `443/tcp` e `443/udp`.
-- **A VPS é ARM64.** Todas as imagens usadas têm `linux/arm64/v8` (verificado no registry), e o CI
-  publica a imagem ARM64 no GHCR; a VPS só faz `pull`.
+- **A VPS é ARM64.** Todas as imagens usadas têm `linux/arm64/v8`, e o CI publica a imagem ARM64 no
+  GHCR; a VPS só faz `pull`.
 - **A imagem vem de registry com tag imutável.** O Compose usa `APP_IMAGE:APP_TAG` (o `APP_TAG` é o
-  SHA do commit), então deploy e rollback são determinísticos e não há build na VPS.
+  SHA do commit), então deploy e rollback são determinísticos e não há build na VPS. O pacote no
+  GHCR é **público**; o primeiro deploy usou `ghcr.io/michaelmelobarbosa/amigo-secreto:2b6e2d4…`.
 - **O firewall do host não protege container com porta publicada.** Quem manda é a *Security List* da
   Oracle Cloud. Detalhes em [Firewall](#firewall-e-exposição-de-portas).
 - **Sempre use `-f docker-compose.prod.yml`.** O `docker-compose.yml` de desenvolvimento está no
@@ -52,39 +60,44 @@ Caddy, em um stack separado, fica exposto.
 
 ## Ambiente da VPS
 
-Levantamento do Hermes, cruzado com este repositório.
+Levantamento confirmado na execução de 2026-11-15 (ver [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §3).
 
-| Item | Valor levantado | Impacto no deploy |
+| Item | Valor medido | Impacto no deploy |
 | --- | --- | --- |
+| Instância | `hermes-vps` · `VM.Standard.A1.Flex` · `sa-saopaulo-1` · AD-1 | Oracle Cloud |
+| IP | `147.15.121.26` público / `10.0.0.71` privado · **sem IPv6 global** | DNS só com registro A; sem AAAA |
 | Arquitetura | **aarch64 (ARM64)** | imagens precisam de `linux/arm64`; build fora da VPS |
-| vCPU | **2** | compilar Maven na VPS é lento e caro em CPU |
-| RAM | **11 GB** totais, ~9,7 GB livres | suficiente; mas a JVM precisa de teto explícito |
-| Disco | `/dev/sda1` 48 GB, **19 GB usados, 29 GB livres (40%)** | recurso mais apertado: logs, cache de build e backups |
-| Kernel | **6.17** com cgroup v2 | atende Docker 27+ |
-| Docker | **não instalado**; `docker.io` 29.1.3 disponível no apt | instalar com `get.docker.com` e conferir Compose v2 |
-| `ip_forward` | **0** | o Docker vai ligar; esperado e inofensivo |
-| Firewall do host | `iptables` com `-A INPUT -j REJECT` no fim | **não** bloqueia porta publicada por container |
-| Cloud | **Oracle Cloud** (Security List / NSG) | é lá que 80/443 precisam ser liberadas |
-| Sistema operacional | não informado **⚠️ confirmar** | `cat /etc/os-release` antes de instalar pacotes |
+| vCPU / RAM | **2 vCPU** · **11 GiB** (+2 GiB swap) | suficiente; `mem_limit` por serviço |
+| Disco | 48 GB, **28 GB livres (43% usado)** | logs, imagens e backups competem |
+| SO / kernel | **Ubuntu 24.04.5 LTS** · `6.17.0-1020-oracle` | atende Docker 29 |
+| Docker / Compose | **29.9.3** / **v5.7.1**, storage `overlayfs` | instalado na execução |
+| Usuário de deploy | `ubuntu` (uid 1001), no grupo `docker`, `sudo` sem senha | `sg docker -c` na sessão em que o grupo ainda não vale |
+| `cron` | **não existe** (`crontab: command not found`) | backup por systemd timer |
+| Firewall do host | `iptables-nft`: `INPUT` aceita 22 + ICMP + lo, resto `REJECT`; `FORWARD` com `REJECT` persistido | **não** bloqueia porta publicada por container |
+| Cloud | **Oracle Cloud** (Security List) | 80/443 liberados em 2026-11-15 |
+| Hermes | `127.0.0.1:9119` e `:9120`; um `python3` em `127.0.0.1:8080` | loopback; sem conflito com a app |
 
 ### O que já roda na VPS
 
-- **Hermes**: processo `systemd` comum, **sem Docker**, com três portas ocupadas — `8080`
-  (monitor), `9119` (dashboard) e `9120` (webapp).
-- Portas já em uso: **22, 53, 111, 631, 8080, 9119, 9120, 49105**.
-- Portas livres sugeridas pelo Hermes: 8081, 8090, 3000, 8443.
-- Hoje **só a 22 passa** pelo firewall do host; 80 e 443 estão livres.
+- **Hermes**: processos systemd em **loopback** (`127.0.0.1:9119`, `:9120` e um `python3` em `:8080`).
+  Nada em `0.0.0.0`, portanto não conflita com a app, que também não publica porta.
+- Portas em uso no host: **22, 53, 111, 631, 8080, 9119, 9120, 49105**.
+- **80/443 agora são do Caddy de borda** (`edge-caddy-1`), que publica `80/tcp`, `443/tcp` e
+  `443/udp`; `2019/tcp` fica só na rede interna.
+- Serviços da Oracle (`unified-monitoring-agent`, `snap.oracle-cloud-agent`) e
+  `unattended-upgrades` não foram tocados.
 
 ### O que isso significa para nós
 
 1. **Não há conflito de software.** Docker usa cgroups/namespaces e cadeias de iptables próprias; o
-   Hermes é um processo systemd. Convivem.
+   Hermes é um processo systemd em loopback. Convivem.
 2. **A porta 8080 do host é do Hermes, mas isso não conflita com a nossa app.** O `8080` da aplicação
    vive no namespace do container. O Caddy de borda alcança `amigo-app:8080` pela rede externa
    `edge`. Conflito só existiria com `-p 8080:8080` ou `network_mode: host` — nenhum dos dois é usado.
-3. **80/443 estão livres**, então o Caddy do stack de borda pode ser o dono delas.
-4. **Disco é o recurso crítico**, não RAM. O uso subiu de 12 GB para 19 GB em poucos dias segundo o
-   Hermes: vale investigar o que cresceu antes de somar mais coisa.
+3. **80/443 pertencem ao Caddy do stack de borda**, que emitiu o certificado Let's Encrypt em
+   ~6 s após o DNS e a Security List.
+4. **Disco é o recurso crítico**, não RAM. No deploy, o consumo medido foi app **288 MiB** (limite
+   1 GiB), db **45 MiB** e Caddy **13 MiB**; restam ~28 GB. Monitore `backups/`, imagens e logs.
 
 ## Decisões de arquitetura (com justificativa)
 
@@ -114,6 +127,10 @@ hostname. O `docker-compose.prod.yml` deste projeto só conhece `app` e `db`; a 
 externa `edge` com o nome `amigo-app`. A configuração do Caddy e os certificados ficam em
 [`INFRA-VPS.md`](./INFRA-VPS.md).
 
+**Executado em 2026-11-15:** `amigo-app` + `amigo-secreto-db-1` no projeto `amigo-secreto`, volume
+`amigo-secreto_pgdata`, rede privada `amigo-secreto_internal`; `edge-caddy-1` no stack `edge`
+(`172.18.0.0/16`).
+
 ### D2. Nenhum container deste projeto publica portas
 
 | Opção | Resultado |
@@ -132,6 +149,9 @@ header `Server`, HSTS e `respond 404` para `/actuator*` (ver [`INFRA-VPS.md`](./
 ```bash
 docker ps --format 'table {{.Names}}\t{{.Ports}}'
 ```
+
+**Resultado em 2026-11-15:** só `edge-caddy-1` publica 80/443; `amigo-app` e
+`amigo-secreto-db-1` aparecem com `8080/tcp` e `5432/tcp` internos, **sem** `0.0.0.0`.
 
 ### D3. Não compilar na VPS; imagem vem de registry
 
@@ -169,9 +189,11 @@ O Compose de produção usa `image:` com tag imutável (SHA) em vez de `build:`:
     pull_policy: always
 ```
 
-O `.env` traz `APP_IMAGE=ghcr.io/<owner>/amigo-secreto` e `APP_TAG=<sha-do-commit>`. Se o pacote do
-GHCR for privado, a VPS precisa de `docker login ghcr.io` com um token de leitura (`read:packages`).
-Tornar o pacote público elimina esse passo.
+O `.env` traz `APP_IMAGE=ghcr.io/michaelmelobarbosa/amigo-secreto` e `APP_TAG=<sha-do-commit>`. O
+pacote no GHCR é **público** (verificado no deploy) e a VPS **não** precisou de `docker login`. A
+imagem do primeiro deploy foi `ghcr.io/michaelmelobarbosa/amigo-secreto:2b6e2d4…`. Se um dia o
+pacote virar privado, a VPS precisará de `docker login ghcr.io` com um token de leitura
+(`read:packages`).
 
 **Plano B (somente se não houver registry):** compilar na própria VPS ARM64 ainda funciona, mas não é
 o fluxo documentado. Se usar, controle o disco:
@@ -196,12 +218,14 @@ pico derruba a VPS inteira por OOM. O `docker-compose.prod.yml` já aplica:
 
 `deploy.resources.limits` também funciona no Compose v2; escolha um formato e mantenha. O importante
 é **ter limite**. Não remova o `MaxRAMPercentage` do Dockerfile: com limite, ele passa a ser correto.
+No deploy de 2026-11-15, o app ficou em **288 MiB de 1 GiB**, o db em **45 MiB** e o Caddy em
+**13 MiB**.
 
 ### D5. Rotação de log do Docker
 
 O driver `json-file` **não tem limite por padrão**. Caddy escreve log de runtime em `stderr` e o
-Spring escreve tudo em `stdout`; ambos crescem sem teto. Com 29 GB livres e crescimento de 7 GB em
-poucos dias, isso é risco operacional real.
+Spring escreve tudo em `stdout`; ambos crescem sem teto. Com ~28 GB livres, isso é risco
+operacional real.
 
 ```yaml
     logging:
@@ -242,6 +266,23 @@ iptables -A DOCKER-USER -j DROP
 > (o DNAT de porta publicada passa por `FORWARD`/`DOCKER-USER`). Se for usar *staging* em
 > `127.0.0.1:8081`, inclua essa porta na regra.
 
+**Estado em 2026-11-15:** o `FORWARD -j REJECT` estava persistido em `/etc/iptables/rules.v4`. O
+restore do `netfilter-persistent` **não** apaga as cadeias `DOCKER-USER`/`DOCKER-FORWARD` (apenas
+duplicou uma regra `REJECT`, removida). Foram criados drop-ins systemd para ordenar
+`netfilter-persistent` antes do `docker.service`:
+
+```ini
+# /etc/systemd/system/netfilter-persistent.service.d/10-before-docker.conf
+[Unit]
+Before=docker.service
+
+# /etc/systemd/system/docker.service.d/10-after-netfilter.conf
+[Unit]
+After=netfilter-persistent.service
+```
+
+A regra restritiva em `DOCKER-USER` **não** foi aplicada; continua opcional.
+
 ### D7. Compose v2 tem que existir
 
 `docker.io` do apt e o plugin `docker compose` são pacotes separados. Os scripts de backup e todo
@@ -252,7 +293,8 @@ docker compose version
 ```
 
 Se faltar, prefira o instalador oficial (`get.docker.com`), que traz o plugin, em vez de misturar
-`docker.io` com pacotes do repositório da Docker Inc.
+`docker.io` com pacotes do repositório da Docker Inc. No deploy de 2026-11-15: **Docker 29.9.3** e
+**Compose v5.7.1**, com storage `overlayfs`.
 
 ### D8. Mapa de portas
 
@@ -267,20 +309,23 @@ Se faltar, prefira o instalador oficial (`get.docker.com`), que traz o plugin, e
 | 2019 | interno do Caddy do stack `edge` | admin API; **nunca** publicar |
 | 8081 | host, opcional | *staging* com `127.0.0.1:8081:8080` + `ssh -L` |
 
+No deploy de 2026-11-15: `edge-caddy-1` publica 80/443; `amigo-app` e `amigo-secreto-db-1` não
+publicam porta alguma.
+
 ## Pré-requisitos
 
-- VPS Linux ARM64 (a atual) com **2 vCPU / 2 GB** no mínimo. **⚠️ confirmar** a distro com
-  `cat /etc/os-release`.
-- **Docker Engine 27+** com o plugin **Compose v2** (`docker compose version`). A VPS tem
-  `docker.io` 29.1.3 disponível no apt, mas o plugin pode faltar.
-- Domínio com registro **A** apontando para o IP da VPS (e **AAAA** se houver IPv6).
+- VPS Linux ARM64 (a atual): Ubuntu 24.04.5, 2 vCPU, 11 GiB, 28 GB livres. **Sem IPv6 global.**
+- **Docker Engine 29.9.3** com **Compose v5.7.1** (instalados em 2026-11-15).
+- Domínio com registro **A** apontando para o IP da VPS. **Não há AAAA** porque a VPS não tem IPv6
+  global.
 - Na **Security List da Oracle**: `80/tcp`, `443/tcp` e `443/udp` liberadas; `22` restrita.
-- Git instalado na VPS.
-- Espaço em disco: **≥ 5 GB** livres para imagem + volumes. Há ~29 GB hoje.
-- **Stack de borda (Caddy) já criado e de pé**, com a rede externa `edge` e o site desta aplicação
+- Git instalado na VPS (o primeiro deploy usou `git clone --depth 1`; ver
+  [O que ainda não foi validado](#o-que-ainda-não-foi-validado)).
+- Espaço em disco: **≥ 5 GB** livres. Há ~28 GB.
+- **Stack de borda (Caddy) de pé**, com a rede externa `edge` e o site desta aplicação
   (`reverse_proxy amigo-app:8080`). Configuração em [`INFRA-VPS.md`](./INFRA-VPS.md).
-- Acesso ao **GitHub Container Registry** (GHCR) para puxar a imagem; se o pacote for privado,
-  `docker login ghcr.io` com um token de leitura (`read:packages`).
+- Acesso ao **GitHub Container Registry**: o pacote é **público**, então não é necessário login.
+- **Não há `cron` na VPS**: o backup usa systemd timer (ver [Backup](#backup)).
 
 ## Instalação do Docker
 
@@ -290,6 +335,9 @@ sudo usermod -aG docker "$USER"   # reabra a sessão depois
 docker --version
 docker compose version
 ```
+
+No deploy de 2026-11-15: **Docker 29.9.3** e **Compose v5.7.1**. O `usermod` só passa a valer em uma
+sessão nova; enquanto isso, rode os comandos como `sg docker -c '<comando>'`.
 
 Por que esse caminho e não `apt install docker.io`: o script oficial instala `docker-ce` + `buildx` +
 `compose` na mesma versão, e os scripts de backup dependem do plugin. Se preferir o pacote da
@@ -322,6 +370,10 @@ ss -lntup | grep -E ':(80|443|8080|5432|2019)\b'
 O esperado: só o `caddy` do stack `edge` aparece publicando 80/443. `amigo-app` e o banco não
 devem aparecer com portas. Nenhum listener em 5432 ou 2019.
 
+**Estado em 2026-11-15:** a Security List tem 3 ingress rules stateful (`TCP 80`, `TCP 443`,
+`UDP 443`, source `0.0.0.0/0`); `5432`, `8080` e `2019` não foram abertos. A auditoria confirmou
+`edge-caddy-1` como único container com portas publicadas.
+
 > **Sempre prefira `-f docker-compose.prod.yml` nesta VPS.** O arquivo de desenvolvimento está no
 > mesmo diretório, roda com o nome de projeto `amigo-secreto-dev` e publica o Postgres apenas em
 > loopback, mas não é o caminho de produção. Um alias ajuda:
@@ -332,16 +384,19 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
 
 ## Primeiro deploy
 
-> Estes passos assumem as pendências de deploy já aplicadas (elas estão no repositório). O que
-> depende de fora está em [O que configurar fora do projeto](#o-que-configurar-fora-do-projeto).
+> **Executado em 2026-11-15.** O registro com evidências, arquivos externos e pendências está em
+> [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md). Os passos abaixo são reproduzíveis para uma nova
+> VPS ou para reconstruir o ambiente.
 
 1. **Clonar o projeto**
 
    ```bash
    sudo mkdir -p /opt/amigo-secreto
    sudo chown "$USER":"$USER" /opt/amigo-secreto
-   git clone <url-do-repositorio> /opt/amigo-secreto
+   git clone --depth 1 https://github.com/michaelmelobarbosa/amigo-secreto.git /opt/amigo-secreto
    cd /opt/amigo-secreto
+   # o primeiro deploy usou --depth 1; para histórico/rollback:
+   #   git fetch --unshallow
    ```
 
 2. **Criar o `.env`**
@@ -359,6 +414,12 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
    `ACME_EMAIL` **não** fica aqui: pertence ao `.env` do stack de borda.
 
    > `.env` e `.env.*` estão no `.gitignore`; `.env.prod.example` é versionado e serve de modelo.
+   >
+   > **Atenção (P10):** valores com espaço exigem aspas. Use
+   > `BREVO_FROM_NAME="Amigo Secreto"`; sem aspas, `source .env` no `deploy.sh` quebra com
+   > `Secreto: command not found`. Os arquivos `.env.example` e `.env.prod.example` atuais ainda
+   > estão sem aspas — corrija no `.env` do servidor até os exemplos serem atualizados (ver
+   > [Pendências abertas](#pendências-abertas-após-o-deploy)).
 
 3. **Conferir a rede de borda e o Caddy**
 
@@ -387,6 +448,8 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
 
    ```bash
    APP_TAG=<sha-do-commit> bash scripts/deploy.sh
+   # se o grupo docker ainda não vale na sessão:
+   # sg docker -c 'APP_TAG=<sha-do-commit> bash scripts/deploy.sh'
    ```
 
    O script valida a rede `edge`, roda `pull` da imagem, `up -d --remove-orphans` e espera o
@@ -400,6 +463,9 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
    Ordem esperada: `db` sobe e fica `healthy`, `app` sobe com a imagem do registry, o Flyway aplica
    as migrações e o healthcheck fica `healthy`. O certificado é emitido pelo Caddy de borda.
 
+   **Resultado em 2026-11-15:** `amigo-secreto-db-1 Healthy` → `amigo-app Started` →
+   `App saudável.`; Flyway `V1`, `V2` e `V3` com `success = t`; logs de arranque sem `ERROR`/`WARN`.
+
 6. **Conferir saúde e logs**
 
    ```bash
@@ -409,7 +475,8 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
    docker compose -f /opt/edge/compose.yml logs --tail=100 caddy
    ```
 
-   `ps` deve mostrar `db (healthy)` e `amigo-app (healthy)`. O Caddy aparece no stack `edge`.
+   `ps` deve mostrar `amigo-secreto-db-1 (healthy)` e `amigo-app (healthy)`. O Caddy aparece no
+   stack `edge` como `edge-caddy-1`.
 
 7. **Testar HTTPS**
 
@@ -423,6 +490,10 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
    Esperado: `200`, HSTS presente, `robots.txt` com `Disallow: /` e **404** em `/actuator/health`.
    O healthcheck real roda dentro do container, em `localhost:8080`.
 
+   **Resultado em 2026-11-15:** `200`; redirect HTTP `308` → HTTPS; HSTS
+   `max-age=31536000; includeSubDomains`; CSP/XFO/nosniff/referrer presentes; `/actuator` e
+   `/actuator/health` `404`; certificado Let's Encrypt válido até 2027-02-13.
+
 8. **Confirmar que o Flyway aplicou do zero**
 
    ```bash
@@ -431,6 +502,9 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
    ```
 
    O schema é do Flyway (`ddl-auto=validate`). Migração aplicada não se edita: crie a próxima versão.
+
+   **Resultado em 2026-11-15:** `V1 init`, `V2 add participant email` e `V3 create notification`,
+   todas com `success = t`.
 
 9. **Auditar portas e disco**
 
@@ -442,10 +516,17 @@ devem aparecer com portas. Nenhum listener em 5432 ou 2019.
 
    Só o Caddy do stack `edge` deve publicar 80/443. `amigo-app` e o banco não publicam portas.
 
+   **Resultado em 2026-11-15:** app `288 MiB / 1 GiB`, db `45 MiB`, Caddy `13 MiB`; ~28 GB livres;
+   só `edge-caddy-1` publica.
+
 ## E-mail (Brevo) no deploy
 
 O envio é **opcional**. Com `EMAIL_ENABLED=false` (padrão), o app usa um sender de log e nada sai do
 servidor; o sorteio continua funcionando e os links seguem sendo copiados/WhatsApp.
+
+**Estado em 2026-11-15:** o e-mail está **desligado** em produção (`EMAIL_ENABLED=false`,
+`BREVO_API_KEY` vazio). O código está pronto; falta a chave de produção. O IP de saída da VPS é
+`147.15.121.26` (relevante se o Brevo usar allowlist).
 
 Para ativar em produção, no `.env` do servidor:
 
@@ -455,7 +536,7 @@ EMAIL_WORKER_ENABLED=true
 BREVO_SANDBOX=false
 BREVO_API_KEY=xkeysib-...          # chave de produção, separada da usada em dev
 BREVO_FROM_EMAIL=no-reply@mail.barbosalabs.dev
-BREVO_FROM_NAME=Amigo Secreto
+BREVO_FROM_NAME="Amigo Secreto"    # aspas obrigatórias (P10)
 BREVO_REPLY_TO=                    # opcional
 ```
 
@@ -463,7 +544,8 @@ Pré-requisitos no Brevo (já feitos neste projeto, revalidar se a conta mudar):
 
 - Domínio de envio `mail.barbosalabs.dev` autenticado (Brevo code, DKIM e DMARC no DNS).
 - Sender `no-reply@mail.barbosalabs.dev` criado e `From` alinhado ao domínio.
-- API key de produção guardada fora do Git; se usar allowlist, liberar o IP da VPS.
+- API key de produção guardada fora do Git; se usar allowlist, liberar o IP de saída da VPS
+  (`147.15.121.26`).
 
 Depois de alterar o `.env`:
 
@@ -488,9 +570,12 @@ Antes de enviar a mudança, rode os testes na sua máquina (`.\mvnw.cmd test` no
 ```bash
 cd /opt/amigo-secreto
 git pull
+# se o clone foi --depth 1: git fetch --unshallow
 
 # tag imutável publicada pelo CI para o commit atual
 APP_TAG=<sha-do-commit> bash scripts/deploy.sh
+# se o grupo docker ainda não vale na sessão:
+# sg docker -c 'APP_TAG=<sha-do-commit> bash scripts/deploy.sh'
 
 # equivalente manual
 export APP_TAG=<sha-do-commit>
@@ -518,6 +603,7 @@ Regras:
 
   ```bash
   APP_TAG=<sha-anterior> bash scripts/deploy.sh
+  # ou: sg docker -c 'APP_TAG=<sha-anterior> bash scripts/deploy.sh'
   ```
 
 - **Banco:** o Flyway não reverte migração. Rollback de schema = restaurar o dump anterior com
@@ -533,17 +619,26 @@ bash scripts/backup-postgres.sh
 Gera `backups/amigo-secreto-AAAAMMDD-HHMMSS.dump` (`pg_dump -Fc`), com permissão `600`, e apaga
 dumps com mais de 14 dias (`RETENTION_DAYS` sobrescreve).
 
-Cron sugerido (backup diário às 03:15), rodando como um usuário do grupo `docker`:
+**Na VPS atual não existe `cron`.** O backup é um **systemd timer** (`amigo-secreto-backup.service`
++ `amigo-secreto-backup.timer`), com `OnCalendar=*-*-* 03:15:00`, `Persistent=true` e
+`RandomizedDelaySec=5m`, rodando como `ubuntu`. O conteúdo integral está em
+[`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §5.6/5.7.
+
+**Estado em 2026-11-15:** timer ativo; próxima execução `2026-11-16 03:18 -03`; execução manual gerou
+`amigo-secreto-20261115-195346.dump` (20K), `pg_restore --list` com 48 entradas e `status=0/SUCCESS`.
+O diretório `backups/` está em `700` e o dump em `600`.
+
+Se a VPS tiver `cron`, o equivalente é:
 
 ```cron
 15 3 * * * cd /opt/amigo-secreto && bash scripts/backup-postgres.sh >> /var/log/amigo-secreto-backup.log 2>&1
 ```
 
 - **Mantenha cópia fora da VPS** (`rclone`/`rsync`). Backup no mesmo disco não protege contra perda
-  da VPS — e o disco é justamente o recurso apertado aqui (29 GB livres).
-- Teste o restore periodicamente — backup nunca testado não é backup.
-- Com 29 GB livres, avalie reduzir `RETENTION_DAYS` ou mover os dumps para storage externo. O Hermes
-  relatou crescimento de 7 GB em poucos dias; investigue o que cresceu antes de somar mais dados.
+  da VPS — e o disco é justamente o recurso apertado aqui (~28 GB livres). **Ainda pendente.**
+- Teste o restore periodicamente — backup nunca testado não é backup. A integridade do dump foi
+  validada; o restore completo **ainda não** foi executado.
+- Com ~28 GB livres, avalie reduzir `RETENTION_DAYS` ou mover os dumps para storage externo.
 
 ## Restore
 
@@ -560,6 +655,10 @@ O script:
 4. **para o container `app`**, roda `pg_restore --clean --if-exists` e sobe a app de novo;
 5. em caso de falha, deixa a app parada — corrija o erro e rode
    `docker compose -f docker-compose.prod.yml start app`.
+
+**Estado em 2026-11-15:** a integridade do dump foi validada com `pg_restore --list` (48 TOC
+entries, gzip, `dbname: amigo_secreto`); o **restore completo ainda não foi executado**. Faça o teste
+com banco descartável abaixo antes de tocar em produção.
 
 Depois do restore, confira a versão do schema: um dump antigo pode deixar o Flyway atrás do código
 em execução. Se a aplicação não subir, o log aponta a migração pendente/divergente.
@@ -583,9 +682,21 @@ docker rm -f restore-test
   aplicação. O token está no *path*, não na query string — filtro de query não resolveria.
 - **Rate limiting.** Implementado em memória por IP (`POST /events`, `/join`, `draw`/`redraw` e
   wishlist), com `429` + `Retry-After`. Os limites vêm de `RATE_LIMIT_*` no `.env`; sem elas valem
-  os padrões de [`RATE-LIMITING.md`](RATE-LIMITING.md). Depois do deploy, confirme que o Caddy de
-  borda entrega o IP real e que um `X-Forwarded-For` forjado não engana o filtro **antes de divulgar
-  o link**.
+  os padrões de [`RATE-LIMITING.md`](RATE-LIMITING.md). **Validado em produção em 2026-11-15:** os
+  cinco primeiros `POST /events` passaram, o sexto retornou `429` com `Retry-After: 600`, e
+  `X-Forwarded-For` forjado (`9.9.9.9`, `8.8.4.4`) não criou bucket novo.
+- **`ubuntu` no grupo `docker` = root equivalente.** O acesso ao socket do Docker permite controlar
+  todos os containers. Aceito para operação single-tenant.
+- **HSTS com `includeSubDomains`** está ativo: subdomínios de `amigo-secreto.barbosalabs.dev` ficam
+  presos em HTTPS. Hosts irmãos (`outro.barbosalabs.dev`) não são afetados.
+- **`db` sem `mem_limit` (P9).** Hoje o Postgres enxerga os ~11 GiB do host; o `INFRA-VPS.md`
+  recomenda `512m`. Ver [Pendências abertas](#pendências-abertas-após-o-deploy).
+- **`;jsessionid` na URL (P11).** Observado em requisição sem cookie; corrigir com
+  `server.servlet.session.tracking-modes: cookie` (ainda pendente).
+- **Caddy é ponto único de falha** para todos os sites da borda; `restart: unless-stopped` mitiga.
+- **Backup no mesmo disco** não protege contra perda da VPS; a cópia off-site está pendente.
+- **Qualquer container na rede `edge` alcança `amigo-app:8080`.** O Docker não tem firewall por
+  container; o banco está na rede privada.
 - **Actuator interno.** Só `health` é exposto (ver `application.yaml`), sem detalhes; o site do stack
   `edge` responde 404 para `/actuator/*` e o container não publica porta no host.
 - **Postgres sem porta pública.** Nenhum container deste projeto publica portas; `db` e `app` usam
@@ -619,6 +730,11 @@ docker rm -f restore-test
 | `502 Bad Gateway` | `amigo-app` está `healthy`? A app está na rede `edge`? `docker compose -f docker-compose.prod.yml ps` |
 | `network edge not found` | a rede externa não existe; `docker network create edge` e suba o stack de borda |
 | `up` falha por variável vazia | `.env` ausente ou incompleto; rode `docker compose -f docker-compose.prod.yml config` |
+| `line NN: Secreto: command not found` no deploy | `BREVO_FROM_NAME` sem aspas quebra `source .env` (P10); use `BREVO_FROM_NAME="Amigo Secreto"` |
+| `crontab: command not found` | a VPS não tem cron; use o systemd timer de backup (ver [Backup](#backup)) |
+| `;jsessionid=` aparece na URL | falta `server.servlet.session.tracking-modes: cookie` (P11) |
+| `db` usando a RAM do host | falta `mem_limit` no `db` (P9); o ideal é `512m` |
+| `permission denied /var/run/docker.sock` | o grupo `docker` não vale na sessão; use `sg docker -c '...'` ou reabra a sessão |
 | Senha do banco mudou no `.env` | A senha só é aplicada na criação do volume; em banco existente, altere via `psql` |
 | `port is already allocated` | 80/443 pertencem ao Caddy do stack `edge`; a app não publica portas. 8080 do host é do Hermes |
 | Postgres acessível de fora | confira `docker ps`: só o Caddy de borda pode publicar portas; o Compose de dev usa loopback |
@@ -644,41 +760,38 @@ As divergências que este documento listava foram corrigidas no código e na con
 O que continua **fora do repositório** está na seção
 [O que configurar fora do projeto](#o-que-configurar-fora-do-projeto).
 
-## Checklist para quem for configurar a VPS
+### Pendências abertas após o deploy
 
-Ordem sugerida. Cada item tem um comando de verificação; não avance sem ele.
+Estas foram encontradas na execução real e **ainda não foram aplicadas** ao repositório:
 
-1. **Confirmar fatos do ambiente** (o levantamento do Hermes pode ter mudado)
-   ```bash
-   cat /etc/os-release
-   uname -m                 # aarch64
-   nproc                    # 2
-   free -h                  # ~11 GB
-   df -h /
-   ss -lntup
-   ```
-2. **Confirmar portas livres**
-   ```bash
-   ss -lntup | grep -E ':(80|443)\b'    # deve sair vazio
-   ```
-3. **Confirmar que o Docker não está instalado / versão**
-   ```bash
-   docker --version || echo "docker ausente"
-   ```
-4. **Confirmar que P1–P6 estão aplicadas** (já estão no código) e rodar os testes do projeto.
-5. **Instalar Docker + Compose v2** e validar `docker compose version`.
-6. **Liberar 80/443 tcp + 443 udp na Security List da Oracle** (fora do host).
-7. **Criar a rede `edge` e subir o stack de borda** (Caddy) — ver
-   [`INFRA-VPS.md`](./INFRA-VPS.md). Confirmar que só o Caddy publica 80/443.
-8. **Publicar/confirmar a imagem ARM64** no GHCR e, se privado, fazer `docker login` na VPS:
-   ```bash
-   docker buildx imagetools inspect ghcr.io/<owner>/amigo-secreto:<sha>
-   ```
-9. **Criar `/opt/amigo-secreto`, o `.env` e conferir `docker compose ... config`**.
-10. **Subir com `APP_TAG=<sha> bash scripts/deploy.sh`** e validar `ps`, `logs` e HTTPS.
-11. **Auditar** `docker ps` (só o Caddy de borda publica), `df -h`, `docker system df`.
-12. **Configurar cron de backup** e cópia fora da VPS.
-13. **Registrar no `implementation.md`** o que foi executado e o que mudou.
+| # | Pendência | Onde | Ação sugerida |
+| --- | --- | --- | --- |
+| **P9** | `db` sem limite de memória | `docker-compose.prod.yml` | `mem_limit: 512m` (e `cpus: "0.5"` opcional) |
+| **P10** | `.env.example`/`.env.prod.example` quebram `source .env` | ambos | `BREVO_FROM_NAME="Amigo Secreto"`; reforçar o aviso de aspas; opcional validar no `deploy.sh` |
+| **P11** | `;jsessionid` na URL quando não há cookie | `application.yaml` | `server.servlet.session.tracking-modes: cookie` |
+| **P12** | Caddy de borda sem `mem_limit` (opcional) | `/opt/edge/compose.yml` (externo) | `mem_limit: 256m` |
+
+Detalhes e reprodução em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §8.
+
+## Checklist de aceite (executado em 2026-11-15)
+
+Todos os itens foram executados na VPS `hermes-vps`; o checklist fica como reprodução para uma nova
+máquina. Evidências em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
+
+- [x] Ambiente medido: Ubuntu 24.04.5, aarch64, 2 vCPU, 11 GiB, 28 GB livres.
+- [x] Portas 80/443 livres antes do Caddy.
+- [x] Docker 29.9.3 + Compose v5.7.1 instalados; `ubuntu` no grupo `docker`.
+- [x] P1–P6 aplicadas e suíte verde (159 testes).
+- [x] TCP 80, TCP 443 e UDP 443 liberados na Security List da Oracle.
+- [x] Rede `edge` + `/opt/edge` + `edge-caddy-1` de pé; certificado Let's Encrypt emitido.
+- [x] Imagem ARM64 pública no GHCR; nenhum `docker login` necessário.
+- [x] `/opt/amigo-secreto` + `.env` (600) + `docker compose config`.
+- [x] `APP_TAG=2b6e2d4… bash scripts/deploy.sh` → `App saudável.`
+- [x] Auditoria: só `edge-caddy-1` publica; app 288 MiB, db 45 MiB, caddy 13 MiB.
+- [x] Backup diário por systemd timer; execução manual validada; off-site pendente.
+- [x] Registro em `DEPLOY_CONCLUIDO.md` e documentação atualizada.
+- [ ] Restore completo, reboot, fluxo no navegador e e-mail real (ver
+      [O que ainda não foi validado](#o-que-ainda-não-foi-validado)).
 
 Coisas que **não** devem ser alteradas sem conversa:
 
@@ -690,73 +803,118 @@ Coisas que **não** devem ser alteradas sem conversa:
 
 ## O que configurar fora do projeto
 
-Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no repositório.
+Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no repositório. **Estado em
+2026-11-15** (detalhes e evidências em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md)):
 
-### 1. DNS
+| Item | Status | Observação |
+| --- | --- | --- |
+| DNS A | ✅ | Name.com, TTL 300, `147.15.121.26`; **sem AAAA** |
+| Security List | ✅ | TCP 80, TCP 443, UDP 443 |
+| Stack `/opt/edge` | ✅ | `edge-caddy-1`, Let's Encrypt, sem access log |
+| GHCR | ✅ | pacote público; sem `docker login` |
+| `.env` da app | ✅ | `600`, senha de 64 hex, `APP_TAG=2b6e2d4…` |
+| Backup | ✅ | systemd timer, 03:15, retenção 14 dias |
+| E-mail Brevo | ❌ | falta API key de produção; `EMAIL_ENABLED=false` |
+| Cópia off-site do backup | ❌ | backup só na VPS |
+| Restore completo | ❌ | só `pg_restore --list` foi validado |
+| Reboot da VPS | ❌ | não testado |
+| Fluxo no navegador | ❌ | smoke HTTP + 159 testes; falta criar/sortear/apagar |
+| Monitoração externa | ❌ | opcional |
+| `DOCKER-USER` restritivo | ❌ | opcional |
+| Clone raso | ❌ | `git fetch --unshallow` |
+| Imagens de teste | ❌ | `hello-world`, `alpine:3.20` |
+| Deploy automatizado (CD) | ❌ | opcional |
 
-- Registro **A** de `amigo-secreto.barbosalabs.dev` apontando para o IP da VPS (e **AAAA** se houver
-  IPv6).
-- `mail.barbosalabs.dev` já autenticado no Brevo (Brevo code + DKIM + DMARC). **Não** crie um segundo
-  DMARC.
-- O Caddy de borda emite/renova o certificado; não é preciso certificado manual.
+### 1. DNS (feito)
 
-### 2. Oracle Cloud (Security List / NSG)
+- Registro **A** de `amigo-secreto.barbosalabs.dev` → `147.15.121.26`, TTL 300, na Name.com.
+- **Nenhum AAAA**: a VPS não tem IPv6 global.
+- `mail.barbosalabs.dev` continua autenticado no Brevo (Brevo code + DKIM + DMARC); MX/TXT não foram
+  tocados. **Não** crie um segundo DMARC.
+- O certificado é emitido/renovado pelo Caddy de borda; não há certificado manual.
 
-- Liberar `80/tcp`, `443/tcp` e `443/udp`.
-- Manter `22/tcp` restrita por IP, se possível.
-- **Não** liberar `5432`, `8080` nem `2019`.
+### 2. Oracle Cloud (Security List / NSG) (feito)
 
-### 3. Stack de borda (`/opt/edge`)
+- 3 ingress rules stateful, source `0.0.0.0/0`: **TCP 80**, **TCP 443** e **UDP 443**.
+- `22/tcp` restrita por IP, se possível.
+- **Não** foram abertos `5432`, `8080` nem `2019`.
+- Egress rules não foram alteradas.
 
-- Criar a rede: `docker network create edge` (ou o nome configurado em `EDGE_NETWORK`).
-- Criar `/opt/edge/compose.yml`, `Caddyfile`, `sites/amigo-secreto.caddy` e `.env` com `DOMAIN` e
-  `ACME_EMAIL`. Os arquivos e a topologia estão em [`INFRA-VPS.md`](./INFRA-VPS.md).
-- O site desta app deve fazer `reverse_proxy amigo-app:8080`, responder 404 para `/actuator*`, enviar
-  HSTS e **não** ter `log` (o token está no path).
-- `docker compose -f /opt/edge/compose.yml up -d`; validar HTTPS, HSTS e `/actuator/health` 404.
+### 3. Stack de borda (`/opt/edge`) (feito)
+
+- Rede `edge` criada (`172.18.0.0/16`); stack `edge` com `edge-caddy-1` publicando 80/443.
+- `/opt/edge/compose.yml`, `Caddyfile`, `sites/amigo-secreto.caddy` e `.env` (`ACME_EMAIL`) criados;
+  `sites/` é `root:root`, montado `:ro`.
+- O site desta app faz `reverse_proxy amigo-app:8080`, responde 404 para `/actuator*`, envia HSTS e
+  **não** tem `log`.
+- **Desvio consciente:** o site usa **hostname literal** em vez de `{$DOMAIN}`; um `.env` por stack
+  não escala para N apps. Nova app = novo arquivo em `sites/` + `caddy reload`.
 - O Caddy é o único a publicar 80/443 e é ponto único de falha para todas as apps da VPS.
+- `mem_limit` do Caddy ainda não existe (P12, opcional).
 
-### 4. GitHub Container Registry (GHCR)
+### 4. GitHub Container Registry (GHCR) (feito)
 
 - O CI publica `ghcr.io/michaelmelobarbosa/amigo-secreto:<sha>` a cada push.
-- O workflow declara `permissions: packages: write`. Se o push falhar com 403, confira em
-  **Settings → Actions → General → Workflow permissions** se o repositório permite leitura e escrita
-  para o `GITHUB_TOKEN`.
-- Se o pacote for **privado**, a VPS precisa de `docker login ghcr.io` com um token de leitura
-  (`read:packages`). Tornar o pacote público elimina esse passo.
-- Confirme a imagem do commit antes do deploy:
-  `docker buildx imagetools inspect ghcr.io/michaelmelobarbosa/amigo-secreto:<sha>`.
-- O GITHUB_TOKEN do Actions já publica; não é preciso criar secret para o push.
+- O pacote é **público**; a VPS não precisou de `docker login`. O workflow declara
+  `permissions: packages: write`.
+- Se o push falhar com 403, confira **Settings → Actions → General → Workflow permissions**.
+- Se o pacote virar privado, a VPS precisará de `docker login ghcr.io` com `read:packages`.
 
-### 5. `.env` da aplicação (`/opt/amigo-secreto/.env`)
+### 5. `.env` da aplicação (feito)
 
-- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (32+ bytes aleatórios).
-- `DOMAIN` (host sem esquema), `APP_IMAGE`, `APP_TAG` (SHA), `EDGE_NETWORK` (padrão `edge`).
-- `RATE_LIMIT_*` (os padrões já são os recomendados) e as variáveis de e-mail.
-- `chmod 600`. Nunca commitar. `ACME_EMAIL` fica no `.env` do stack de borda, não aqui.
+- `/opt/amigo-secreto/.env` em `600`, dono `ubuntu`, fora do Git.
+- `POSTGRES_PASSWORD` gerada com `openssl rand -hex 32` (64 hex), só no servidor.
+- `DOMAIN=amigo-secreto.barbosalabs.dev`, `APP_IMAGE=ghcr.io/michaelmelobarbosa/amigo-secreto`,
+  `APP_TAG=2b6e2d4…`, `EDGE_NETWORK=edge`.
+- `RATE_LIMIT_*` com os padrões e `EMAIL_ENABLED=false` no primeiro deploy.
+- **P10:** `BREVO_FROM_NAME="Amigo Secreto"` com aspas; sem aspas o `source .env` quebra.
 
-### 6. Brevo (fase 2)
+### 6. Brevo (fase 2) (pendente)
 
 - Domínio de envio `mail.barbosalabs.dev` autenticado; sender `no-reply@mail.barbosalabs.dev`.
-- API key de **produção** separada da de dev; se usar allowlist de IP, cadastrar o IP de saída da
-  VPS.
-- Para envio real: `EMAIL_ENABLED=true`, `EMAIL_WORKER_ENABLED=true`, `BREVO_SANDBOX=false`.
+- Falta a **API key de produção**; se usar allowlist, o IP de saída da VPS é `147.15.121.26`.
+- Para envio real: `EMAIL_ENABLED=true`, `EMAIL_WORKER_ENABLED=true`, `BREVO_SANDBOX=false` e
+  `docker compose -f docker-compose.prod.yml up -d app`.
+- Teste de fumaça: criar evento → sortear com participante que tenha e-mail → conferir "Enviado" no
+  painel e o log transacional do Brevo.
 
-### 7. Backup e restore
+### 7. Backup e restore (parcial)
 
-- Cron diário rodando `bash scripts/backup-postgres.sh` (exemplo em [Backup](#backup)).
-- Copiar os dumps para fora da VPS (`rclone`/`rsync`): backup no mesmo disco não protege contra a
-  perda da VPS.
-- Testar o restore periodicamente com `scripts/restore-postgres.sh`.
+- Backup diário via systemd timer (`amigo-secreto-backup.timer`), 03:15, retenção 14 dias; execução
+  manual validada.
+- **Cópia off-site ainda não existe**: backup no mesmo disco não protege contra perda da VPS.
+- **Restore completo ainda não foi executado**; só a integridade do dump foi validada com
+  `pg_restore --list`.
+- Teste o restore periodicamente com `scripts/restore-postgres.sh` (procedimento em
+  [Restore](#restore)).
+
+### 8. Próximos passos operacionais (pendentes)
+
+- Reiniciar a VPS em janela controlada e conferir: 3 containers `Up`, `iptables -S FORWARD` com
+  `DOCKER-USER` no topo, HTTPS 200 e `systemctl list-timers`.
+- Criar um evento real de teste pelo navegador e apagar depois (o banco está em 0 eventos).
+- Configurar monitoração externa (ex.: Uptime Kuma/healthchecks.io) apontando para `/`.
+- Opcional: aplicar a regra restritiva em `DOCKER-USER` (D6) e `mem_limit` no Caddy (P12).
+- `git fetch --unshallow` se precisar de histórico/rollback por commit.
+- `docker rmi hello-world alpine:3.20` para limpar as imagens de teste.
+- Opcional: CD com `appleboy/ssh-action` rodando `scripts/deploy.sh` com `APP_TAG=$GITHUB_SHA`.
 
 ## O que ainda não foi validado
 
-O Docker não está instalado na máquina de desenvolvimento, então o build da imagem, a subida do
-Compose e o healthcheck foram escritos e revisados, mas **não executados localmente**. O CI ainda não
-rodou o novo job de publicação; a primeira execução valida o build ARM64. Do lado da VPS, o Hermes
-levantou o ambiente, mas o stack de borda e esta aplicação ainda não foram rodados lá.
+| Item | Status | Como fechar |
+| --- | --- | --- |
+| E-mail real (Brevo) | ❌ | API key de produção + `EMAIL_ENABLED=true` + teste de fumaça |
+| Cópia off-site do backup | ❌ | `rclone`/`rsync` para storage externo |
+| Restore completo | ❌ | banco descartável + `restore-postgres.sh` |
+| Reboot da VPS | ❌ | reiniciar e conferir containers, iptables, HTTPS e timer |
+| Fluxo funcional no navegador | ❌ | criar evento, sortear, abrir link e apagar |
+| Monitoração/uptime externo | ❌ | monitor HTTP com alerta |
+| `DOCKER-USER` restritivo | ❌ | regras de drop liberando só 80/443 |
+| Clone raso | ❌ | `git fetch --unshallow` |
+| Imagens de teste no host | ❌ | `docker rmi hello-world alpine:3.20` |
+| Deploy automatizado (CD) | ❌ | opcional |
+| Atualização de imagens base | ❌ | `docker compose pull` periódico; avaliar fixar digest |
 
-No primeiro deploy, valide nesta ordem: rede `edge` e stack de borda de pé, `docker compose -f
-docker-compose.prod.yml config`, `pull`, `up -d`, `ps`/`logs`, HTTPS e a auditoria de portas. Depois
-confirme que o rate limiting conta o IP real do cliente (e não o do Caddy) antes de divulgar o link.
-Só então divulgue.
+**Pendências de código/configuração** (P9–P12) estão em
+[Pendências abertas](#pendências-abertas-após-o-deploy). A suíte de 159 testes e o smoke HTTP de
+2026-11-15 cobrem o fluxo funcional em nível de aplicação, mas não substituem o teste no navegador.

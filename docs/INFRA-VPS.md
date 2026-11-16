@@ -4,28 +4,29 @@ Documento de **decisões de arquitetura** para a VPS que hospeda o Amigo Secreto
 deploy desta aplicação está em [`DEPLOY.md`](./DEPLOY.md); aqui fica o que é transversal a todas as
 aplicações da máquina.
 
-> **Contexto.** A VPS é ARM64, 2 vCPU, 11 GB de RAM e 48 GB de disco (29 GB livres), roda o agente
-> **Hermes** como processo systemd (portas 8080, 9119 e 9120) e não tinha Docker. Levantamento feito
-> pelo Hermes em 2026-11-14. Fatos operacionais detalhados e implicações estão em
-> [`DEPLOY.md#ambiente-da-vps`](./DEPLOY.md#ambiente-da-vps).
+> **Contexto.** A VPS é ARM64, 2 vCPU, 11 GiB e 48 GB de disco (28 GB livres), Ubuntu 24.04.5 LTS,
+> Docker 29.9.3 e Compose v5.7.1. O agente **Hermes** roda em loopback (8080, 9119 e 9120) e a
+> máquina **não tem `cron`**. Levantamento inicial em 2026-11-14, confirmado na execução de
+> 2026-11-15. Fatos detalhados e evidências estão em
+> [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 
 ## Estado atual
 
-O Caddy **já foi desacoplado** deste projeto: o Compose do Amigo Secreto tem apenas `app` e `db`;
-o Caddy vive em um stack `edge`, compartilhado com as demais aplicações da VPS. O ingress roteia
-por hostname na 443 e alcança `amigo-app:8080` pela rede externa `edge`.
+O Caddy **já foi desacoplado e está em execução** desde 2026-11-15: o Compose do Amigo Secreto tem
+apenas `app` e `db`; o Caddy vive no stack `edge`, compartilhado com as demais aplicações da VPS. O
+ingress roteia por hostname na 443 e alcança `amigo-app:8080` pela rede externa `edge`.
 
 ```
-Internet ──▶ caddy :80/:443            stack "edge" (rede edge)
+Internet ──▶ edge-caddy-1 :80/:443      stack "edge" (rede edge, 172.18.0.0/16)
               │
-              ├──▶ amigo-app:8080  ──▶ amigo-db:5432   (rede privada do projeto)
-              └──▶ outra-app:3000  ──▶ outra-db:5432   (rede privada do projeto)
+              ├──▶ amigo-app:8080  ──▶ amigo-secreto-db-1:5432   (rede amigo-secreto_internal)
+              └──▶ outra-app:3000  ──▶ outra-db:5432             (rede privada do projeto)
 ```
 
 O que fica neste repositório: `docker-compose.prod.yml` com `app` + `db`, a imagem da app e os
 scripts de operação. O que fica no stack de borda: `Caddyfile`, `sites/*.caddy`, certificados e a
 rede `edge`. O `Caddyfile` que antes estava na raiz deste projeto foi removido para não sugerir
-duas fontes de verdade.
+duas fontes de verdade. Registro da execução: [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 
 ## Opções consideradas
 
@@ -51,7 +52,7 @@ Criar `:8443` é possível, mas significa: abrir mais uma porta na Security List
 digitar porta na URL, e — se a app publicar a porta direto no host em vez de usar o proxy — anular o
 proxy por completo.
 
-## Topologia recomendada (opção A)
+## Topologia adotada (opção A)
 
 ### Rede
 
@@ -90,8 +91,8 @@ Custar ~100 MB a mais e ainda assim escolher o dedicado se justifica por:
 - **Mover é trivial.** `docker compose` + volume acompanham o projeto para outra VPS sem exportar
   schema de um cluster alheio.
 
-O custo real é 60–120 MB de RAM e ~60–120 MB de disco por instância (`initdb` + WAL). Contra 11 GB
-e 29 GB livres, ~100 MB de diferença é ruído.
+O custo real é 60–120 MB de RAM e ~60–120 MB de disco por instância (`initdb` + WAL). Contra 11 GiB
+e 28 GB livres, ~100 MB de diferença é ruído.
 
 **Quando compartilhar faria sentido:** 5+ aplicações minúsculas, uma VPS de 2 GB, ou um Postgres
 gerenciado que já oferece *database* por app. Nesse caso, use **database** (não schema) por
@@ -109,7 +110,7 @@ Cuidados no modelo dedicado:
 ### Stack de borda
 
 ```yaml
-# edge/compose.yml
+# /opt/edge/compose.yml
 name: edge
 
 services:
@@ -121,8 +122,7 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      DOMAIN: ${DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL}
+      ACME_EMAIL: ${ACME_EMAIL}   # cada site usa hostname literal em sites/*.caddy
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./sites:/etc/caddy/sites:ro
@@ -144,11 +144,11 @@ volumes:
   caddy_config:
 ```
 
-O `.env` do stack fica em `/opt/edge/.env` e é a única fonte desses valores:
+O `.env` do stack fica em `/opt/edge/.env` (600, root) e guarda **só** o `ACME_EMAIL`. O domínio de
+cada site fica **literal** no arquivo `sites/*.caddy`:
 
 ```bash
-DOMAIN=amigo-secreto.barbosalabs.dev
-ACME_EMAIL=voce@exemplo.com
+ACME_EMAIL=seu-email@exemplo.com
 ```
 
 - `caddy_data` guarda certificados e chaves: **precisa persistir**. Recriar o container sem o volume
@@ -171,8 +171,8 @@ import sites/*.caddy
 ### Site do Amigo Secreto
 
 ```caddyfile
-# edge/sites/amigo-secreto.caddy
-{$DOMAIN} {
+# /opt/edge/sites/amigo-secreto.caddy
+amigo-secreto.barbosalabs.dev {
     encode zstd gzip
 
     @actuator path /actuator /actuator/*
@@ -189,8 +189,9 @@ import sites/*.caddy
 }
 ```
 
-`DOMAIN` e `ACME_EMAIL` vêm do `.env` do stack de borda. O valor de `DOMAIN` é o mesmo
-`amigo-secreto.barbosalabs.dev` usado no `.env` da aplicação (que monta o `APP_BASE_URL`).
+**Desvio consciente do desenho inicial:** o site usa **hostname literal** em vez de `{$DOMAIN}`. O
+`.env` do stack guarda só o `ACME_EMAIL`; um único `.env` não comporta N domínios. Nova aplicação =
+novo arquivo em `sites/` + `caddy reload`, sem reiniciar o stack.
 
 ### App do Amigo Secreto
 
@@ -249,7 +250,7 @@ depender de persistência — para poucas apps, arquivo + `import` + reload é m
 ### Reload sem downtime
 
 ```bash
-docker compose -f edge/compose.yml exec caddy caddy reload --config /etc/caddy/Caddyfile
+docker compose -f /opt/edge/compose.yml exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
 Como `Caddyfile` e `sites/` são bind mounts, mudanças valem no reload, sem rebuild. Exceção: mudanças
@@ -343,7 +344,7 @@ logging:
 ```
 
 Se o Caddy escrever em arquivo, monte `/var/log/caddy` em volume e use `roll_size`/`roll_keep`/
-`roll_keep_for`. Sem isso, o disco de 29 GB vira o gargalo.
+`roll_keep_for`. Sem isso, o disco de 28 GB vira o gargalo.
 
 ### Redução de volume
 
@@ -356,31 +357,32 @@ Se o Caddy escrever em arquivo, monte `/var/log/caddy` em volume e use `roll_siz
 Access log é dado pessoal. Defina prazo (30–90 dias é razoável) e faça o `roll_keep_for` cumprir
 sozinho. Documente a decisão no projeto dono do site.
 
-## Migração para o stack de borda (aplicada)
+## Migração para o stack de borda (executada em 2026-11-15)
 
-O que já está no repositório:
+O que está no repositório:
 
 - [x] `docker-compose.prod.yml` sem `caddy`, com `container_name: amigo-app` e redes `internal` + `edge`.
 - [x] `Caddyfile` da raiz removido (a fonte de verdade passou a ser o stack de borda).
 - [x] `APP_IMAGE`/`APP_TAG`, `mem_limit`, `cpus`, logging e imagem ARM64 publicada pelo CI.
 
-O que fica **fora** do repositório:
+O que foi executado **fora** do repositório:
 
-1. Criar a rede: `docker network create edge`.
-2. Criar `/opt/edge` com `compose.yml`, `Caddyfile`, `sites/amigo-secreto.caddy` e `.env`
-   (`DOMAIN`, `ACME_EMAIL`).
-3. `docker compose -f /opt/edge/compose.yml up -d`.
-4. No projeto: `APP_TAG=<sha> bash scripts/deploy.sh`.
-5. Validar: HTTPS, `/actuator` 404, HSTS e `docker ps` mostrando só o Caddy publicando portas.
+- [x] `docker network create edge` → rede `172.18.0.0/16`.
+- [x] `/opt/edge` com `compose.yml`, `Caddyfile`, `sites/amigo-secreto.caddy` e `.env` (`ACME_EMAIL`).
+- [x] `docker compose -f /opt/edge/compose.yml up -d` → `edge-caddy-1`; certificado Let's Encrypt.
+- [x] No projeto: `APP_TAG=2b6e2d4… bash scripts/deploy.sh` → app saudável.
+- [x] Validação: HTTPS, `/actuator` 404, HSTS e `docker ps` mostrando só o Caddy publicando portas.
+- [ ] `mem_limit: 256m` no Caddy (P12, opcional).
 
 **Cuidado na primeira migração:** não rode os dois Caddys ao mesmo tempo — 80/443 só aceitam um
-processo. Pare o antigo antes de subir o novo, ou aceite alguns segundos de 502.
+processo. Pare o antigo antes de subir o novo, ou aceite alguns segundos de 502. Registro completo
+em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 
 ## Riscos e pontos abertos
 
-- **Recursos:** 2 vCPU e 11 GB para N apps. Defina `mem_limit` e `cpus` por serviço; sem isso, um
-  OOM em uma app pode derrubar as outras.
-- **Disco:** 29 GB livres. Imagens, camadas, logs e backups competem. Não compile na VPS; controle
+- **Recursos:** 2 vCPU e 11 GiB para N apps. Defina `mem_limit` e `cpus` por serviço; sem isso, um
+  OOM em uma app pode derrubar as outras. O Caddy do stack `edge` ainda não tem `mem_limit` (P12).
+- **Disco:** 28 GB livres. Imagens, camadas, logs e backups competem. Não compile na VPS; controle
   rotação e retenção.
 - **Blast radius da borda:** o Caddy é ponto único de falha para todos os sites. Se ele cair, todos
   caem. `restart: unless-stopped` mitiga, não elimina.
@@ -403,3 +405,6 @@ processo. Pare o antigo antes de subir o novo, ou aceite alguns segundos de 502.
 | 2026-11-14 | Caddy desacoplável para stack de borda (opção A) quando houver segunda app | evita acoplar ciclos de deploy; roteia por SNI na 443 |
 | 2026-11-14 | Um Postgres por projeto, não um cluster compartilhado | isolamento de backup/restore, versão, credenciais e locks; custo de ~100 MB é irrelevante neste porte |
 | 2026-11-15 | Caddy desacoplado de fato: `edge` fora deste repositório | a app publica só `expose: 8080`; o ingress é compartilhado e roteia várias apps |
+| 2026-11-15 | Site com hostname literal em `sites/*.caddy`, não `{$DOMAIN}` | um `.env` por stack não comporta N domínios; nova app = novo arquivo + reload |
+| 2026-11-15 | Backup por systemd timer, não cron | a VPS não tem `cron`; `Persistent=true` cobre janelas perdidas |
+| 2026-11-15 | `db` ainda sem `mem_limit` | lacuna conhecida (P9); o `INFRA-VPS.md` recomenda `512m` |
