@@ -141,6 +141,36 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void limitsEmailLinksAndResendSeparately() throws Exception {
+        RateLimitFilter filter = filter(emailProperties(1, 1, Duration.ofHours(1)));
+
+        assertThat(call(filter, "POST", "/admin/adm_abc/links/email", "203.0.113.10").passed()).isTrue();
+        Result blockedLinks = call(filter, "POST", "/admin/adm_abc/links/email", "203.0.113.10");
+        assertThat(blockedLinks.passed()).isFalse();
+        assertThat(blockedLinks.status()).isEqualTo(429);
+        assertThat(blockedLinks.retryAfter()).isEqualTo("3600");
+
+        assertThat(call(filter, "POST", "/admin/adm_abc/participants/p_abc/email/resend", "203.0.113.10")
+                .passed()).isTrue();
+        assertThat(call(filter, "POST", "/admin/adm_abc/participants/p_abc/email/resend", "203.0.113.10")
+                .passed()).isFalse();
+    }
+
+    @Test
+    void emailEndpointsUseTheirOwnHourWindow() throws Exception {
+        RateLimitFilter filter = filter(emailProperties(1, 1, Duration.ofHours(1)));
+
+        assertThat(call(filter, "POST", "/admin/adm_abc/links/email", "203.0.113.10").passed()).isTrue();
+
+        // Passou da janela curta (10 min), mas o e-mail usa a janela de 1 hora.
+        clock.advance(Duration.ofMinutes(11));
+        assertThat(call(filter, "POST", "/admin/adm_abc/links/email", "203.0.113.10").passed()).isFalse();
+
+        clock.advance(Duration.ofMinutes(50));
+        assertThat(call(filter, "POST", "/admin/adm_abc/links/email", "203.0.113.10").passed()).isTrue();
+    }
+
+    @Test
     void blockedResponseDoesNotLeakIpOrToken() throws Exception {
         RateLimitFilter filter = filter(properties(true, 30, 1, 10, 30));
 
@@ -173,9 +203,28 @@ class RateLimitFilterTest {
                 join,
                 draw,
                 wishlist,
+                10,
+                20,
                 Duration.ofMinutes(10),
                 Duration.ofHours(1),
+                Duration.ofHours(1),
                 maxKeys);
+    }
+
+    private static RateLimitProperties emailProperties(
+            int links, int resend, Duration emailWindow) {
+        return new RateLimitProperties(
+                true,
+                5,
+                30,
+                10,
+                30,
+                links,
+                resend,
+                Duration.ofMinutes(10),
+                Duration.ofHours(1),
+                emailWindow,
+                10_000);
     }
 
     private static Result call(RateLimitFilter filter, String method, String path, String ip)

@@ -370,8 +370,8 @@ Não foram abertas portas `5432`, `8080` ou `2019`; egress rules não foram alte
 >
 > **Atualização de 2026-11-16:** a API key de produção foi validada e o e-mail foi **ligado e
 > validado ponta a ponta** (2 notificações `SENT`, painel **Enviado**, evento de teste apagado). Ver
-> §14. As pendências restantes são SPF, rate limit dos endpoints de e-mail e o deploy da imagem do
-> commit novo.
+> §14. O SPF foi publicado e o rate limit dos endpoints de e-mail ficou no código; resta o deploy da
+> imagem do commit novo, que leva o rate limit.
 
 ### P9 — `db` sem limite de memória (divergência com o próprio `INFRA-VPS.md`)
 
@@ -428,7 +428,7 @@ todos os serviços, vale um bloco análogo (ex.: `mem_limit: 256m`).
 
 | Item | Por quê | Como fechar |
 | --- | --- | --- |
-| **E-mail real (Brevo)** | ✅ Validado em 2026-11-16: 2 `SENT`, `attempts=1`, painel **Enviado**, evento apagado | Ver §14; pendências: SPF e rate limit dos endpoints de e-mail |
+| **E-mail real (Brevo)** | ✅ Validado em 2026-11-16: 2 `SENT`, `attempts=1`, painel **Enviado**, evento apagado; SPF aplicado e rate limit no código (P15 leva à VPS) | Ver §14 |
 | **Cópia off-site do backup** | Decisão do dono: "só na VPS por enquanto" | Backup no mesmo disco **não** protege contra perda da VPS. Restam 28 GB; `backups/` é `700` e a retenção é 14 dias |
 | **Restore completo testado** | Só foi validada a integridade do dump (`pg_restore --list`) | Rodar `scripts/restore-postgres.sh` num banco descartável (procedimento do `DEPLOY.md#restore`) e depois um ciclo real |
 | **Reboot da VPS** | Não foi reiniciada em produção nesta janela | Após o próximo reboot: conferir `docker ps` com os 3 containers `Up`, `iptables -S FORWARD` com `DOCKER-USER` no topo, `https://…` 200 e `systemctl list-timers` |
@@ -441,8 +441,8 @@ todos os serviços, vale um bloco análogo (ex.: `mem_limit: 256m`).
 | **Atualização de imagens base** | `postgres:17-alpine`/`caddy:2-alpine` são flutuantes por tag | `docker compose pull` periódico + `docker image prune`; avaliar fixar digest |
 
 > O e-mail real foi validado em 2026-11-16 via API/UI (§14). Os scripts `scripts/check-brevo.sh` e
-> `scripts/smoke-email.sh` estão no working tree e precisam ser commitados para uso na VPS; o
-> procedimento está em [`EMAIL-BREVO.md`](./EMAIL-BREVO.md) §8.1/8.2.
+> `scripts/smoke-email.sh` já foram adicionados ao repositório e podem ser usados na VPS após o
+> deploy do commit que os contém; o procedimento está em [`EMAIL-BREVO.md`](./EMAIL-BREVO.md) §8.1/8.2.
 
 ---
 
@@ -559,16 +559,15 @@ Execução pelo Hermes, com autorização do dono.
 ### 14.1 Correções e pendências
 
 - **Scripts:** `scripts/check-brevo.sh` e `scripts/smoke-email.sh` **não estavam no remoto** no
-  momento do teste; o Hermes fez o equivalente via API/UI. Os scripts estão no repositório de
-  trabalho e precisam entrar no próximo commit para serem usados na VPS.
-- **SPF:** Brevo code, DKIM (`brevo1`/`brevo2._domainkey.mail.barbosalabs.dev`) e DMARC (`p=none`,
-  `rua@dmarc.brevo.com`) estão publicados, mas **não há SPF** em `mail.barbosalabs.dev` nem no apex.
-  A entrega funciona por DKIM/DMARC, mas a reputação fica mais frágil. Criar:
-  `mail.barbosalabs.dev TXT "v=spf1 include:spf.sendinblue.com -all"` (confirmar o valor na aba de
-  autenticação do Brevo).
-- **Rate limit:** `POST /admin/{token}/links/email` e
-  `POST /admin/{token}/participants/{id}/email/resend` ainda não têm limite. Com o e-mail ativo, isso
-  queima a cota de 300/dia e a reputação do domínio; é a próxima prioridade de segurança.
+  momento do teste; o Hermes fez o equivalente via API/UI. Os scripts foram adicionados ao
+  repositório depois e podem ser usados na VPS após o deploy do commit que os contém.
+- **SPF:** publicado em 2026-11-16 em `mail.barbosalabs.dev` (`v=spf1 include:spf.sendinblue.com
+  -all`) e verificado no DNS público. O `brevo-code` continua no mesmo nome, como segundo TXT. DKIM
+  (`brevo1`/`brevo2`) e DMARC (`p=none`, `rua@dmarc.brevo.com`) já estavam corretos.
+- **Rate limit:** `POST /admin/{token}/links/email` (10/h) e
+  `POST /admin/{token}/participants/{id}/email/resend` (20/h) foram incluídos no `RateLimitFilter`
+  em 2026-11-16, com janela de 1h e baldes separados, para proteger a cota de 300/dia e a reputação
+  do domínio. Entram em produção com o deploy da imagem nova (P15).
 - **Imagem/deploy:** a VPS roda `2b6e2d4`; o remoto está em `26bd7f4` (P9–P12) e ainda não havia
   imagem publicada para esse SHA. Quando o CI publicar, o deploy é
   `APP_TAG=<novo-sha> bash scripts/deploy.sh`.

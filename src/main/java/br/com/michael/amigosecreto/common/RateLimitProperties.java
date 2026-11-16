@@ -8,8 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>Os limites são generosos de propósito: uma família atrás do mesmo IP
  * precisa criar um evento e várias pessoas entrarem em sequência. Categorias
- * têm contadores separados, e o limite de sorteio usa uma janela própria
- * (uma hora) porque o abuso relevante ali é diferente de inscrição.
+ * têm contadores separados; sorteio e endpoints de e-mail usam uma janela
+ * própria (uma hora) porque o abuso relevante ali é diferente de inscrição.
  */
 @ConfigurationProperties(prefix = "app.rate-limit")
 public record RateLimitProperties(
@@ -18,8 +18,11 @@ public record RateLimitProperties(
         int joinPerWindow,
         int drawPerWindow,
         int wishlistPerWindow,
+        int emailLinksPerWindow,
+        int emailResendPerWindow,
         Duration window,
         Duration drawWindow,
+        Duration emailWindow,
         int maxKeys) {
 
     public RateLimitProperties {
@@ -27,8 +30,11 @@ public record RateLimitProperties(
         joinPerWindow = positive(joinPerWindow, 30);
         drawPerWindow = positive(drawPerWindow, 10);
         wishlistPerWindow = positive(wishlistPerWindow, 30);
+        emailLinksPerWindow = positive(emailLinksPerWindow, 10);
+        emailResendPerWindow = positive(emailResendPerWindow, 20);
         window = positive(window, Duration.ofMinutes(10));
         drawWindow = positive(drawWindow, Duration.ofHours(1));
+        emailWindow = positive(emailWindow, Duration.ofHours(1));
         maxKeys = positive(maxKeys, 10_000);
     }
 

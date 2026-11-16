@@ -4,7 +4,9 @@
 > resposta 429 e os testes estão no código. A validação real confirmou os limites e o IP do cliente
 > atrás do Caddy de borda (ver [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §4 F4): os cinco
 > primeiros `POST /events` passaram, o sexto retornou `429` com `Retry-After: 600`, e
-> `X-Forwarded-For` forjado (`9.9.9.9`, `8.8.4.4`) não criou bucket novo.
+> `X-Forwarded-For` forjado (`9.9.9.9`, `8.8.4.4`) não criou bucket novo. Em 2026-11-16, os
+> endpoints `links/email` (10/h) e `email/resend` (20/h) também foram incluídos no código, com janela
+> própria; eles entram em produção com o próximo deploy (P15).
 
 ## 1. Por que existe
 
@@ -29,10 +31,14 @@ casual** sem atrapalhar família, escritório ou NAT compartilhado.
 | `POST /events` | `event-create` | 5 por 10 minutos |
 | `POST /join/{inviteCode}` | `join` | 30 por 10 minutos |
 | `POST /admin/{adminToken}/draw` e `/redraw` | `draw` | 10 por hora |
+| `POST /admin/{adminToken}/links/email` | `email-links` | 10 por hora |
+| `POST /admin/{adminToken}/participants/{id}/email/resend` | `email-resend` | 20 por hora |
 | `POST /p/{accessToken}/wishlist` | `wishlist` | 30 por 10 minutos |
 
 - Só **POST**; GET, assets, `/robots.txt`, `/actuator/**` e `/error` ficam fora.
 - Categorias têm contadores separados: criar evento não consome a cota de join.
+- Os endpoints de e-mail entraram em 2026-11-16 para proteger a cota de 300/dia e a reputação do
+  domínio do Brevo.
 - Limites generosos de propósito: uma família atrás do mesmo IP precisa criar 1 evento e 10–15
   pessoas entrarem em sequência.
 - Sem limite global de eventos: um atacante poderia esgotar a cota e bloquear usuários legítimos.
@@ -97,7 +103,7 @@ Fluxo:
 4. Em uma seção sincronizada curta: pega a janela, zera se expirou, incrementa e decide.
 5. Se passou do limite, escreve `429` + `Retry-After` e retorna; senão, `chain.doFilter`.
 
-Configuração sugerida:
+Configuração atual:
 
 ```yaml
 app:
@@ -107,8 +113,11 @@ app:
     join-per-window: ${RATE_LIMIT_JOIN:30}
     draw-per-window: ${RATE_LIMIT_DRAW:10}
     wishlist-per-window: ${RATE_LIMIT_WISHLIST:30}
+    email-links-per-window: ${RATE_LIMIT_EMAIL_LINKS:10}
+    email-resend-per-window: ${RATE_LIMIT_EMAIL_RESEND:20}
     window: ${RATE_LIMIT_WINDOW:PT10M}
     draw-window: ${RATE_LIMIT_DRAW_WINDOW:PT1H}
+    email-window: ${RATE_LIMIT_EMAIL_WINDOW:PT1H}
     max-keys: ${RATE_LIMIT_MAX_KEYS:10000}
 ```
 
@@ -147,17 +156,19 @@ debug temporário, sem IP) que o balde é o do cliente real.
 - GET `/` e assets não consomem cota.
 - `join` tem balde separado de `event-create`.
 - `draw`/`redraw` usam a janela de 1 hora.
+- `links/email` e `email/resend` têm baldes separados, janela de 1 hora e 429 no limite.
 - Configuração `enabled=false` desliga tudo.
 - IPv4, IPv6 e IPv6 mapeado (`::ffff:1.2.3.4`) são normalizados corretamente.
 - Mapa não cresce sem limite (teste unitário com `maxKeys` pequeno).
 - 429 não contém token, IP nem detalhe interno.
-- Suíte existente continua verde (162 testes).
+- Suíte existente continua verde (164 testes).
 
 ## 7. Checklist de execução
 
 - [x] Confirmar que o deploy real está estável e que o app não publica porta no host.
 - [x] Confirmar que o Caddy entrega o IP real e que `X-Forwarded-For` forjado não engana o filtro.
 - [x] Implementar propriedades, filtro, resposta 429 e testes.
+- [x] Incluir `links/email` (10/h) e `email/resend` (20/h) em 2026-11-16, com testes de janela e baldes.
 - [x] Rodar a suíte completa.
 - [ ] Subir com limites padrão e testar de duas redes diferentes (validado de fora + XFF forjado;
       falta uma segunda rede).
@@ -178,17 +189,17 @@ debug temporário, sem IP) que o balde é o do cliente real.
 - O disco continua crescendo com eventos legítimos antigos; a limpeza/expiração de eventos é uma
   pendência separada em [`IDEAS.md`](IDEAS.md).
 
-## 9. Pendente: endpoints de e-mail (P13)
+## 9. Endpoints de e-mail (P13 — implementado)
 
 Com o e-mail ligado em produção em 2026-11-16, dois endpoints passaram a consumir cota e reputação
-do Brevo sem limite por IP:
+do Brevo. Eles foram incluídos no rate limit no mesmo dia:
 
-| Rota | Categoria sugerida | Limite inicial |
+| Rota | Categoria | Limite |
 | --- | --- | --- |
 | `POST /admin/{token}/links/email` | `email-links` | 10 por hora |
 | `POST /admin/{token}/participants/{id}/email/resend` | `email-resend` | 20 por hora |
 
 Motivo: o plano grátis tem **300 e-mails/dia**; um evento de 100 participantes com um refazer já usa
 200. Sem limite, um organizador (ou alguém com o link do painel) pode esgotar a cota e queimar a
-reputação do domínio. A implementação reutiliza o `RateLimitFilter` e o `app.rate-limit`, com janela
-própria se necessário. **Ainda não implementado**; é a próxima prioridade de segurança.
+reputação do domínio. A implementação usa o `RateLimitFilter` e o `app.rate-limit`, com
+`email-window` própria (`PT1H`) e baldes separados. Coberto por `RateLimitFilterTest`.

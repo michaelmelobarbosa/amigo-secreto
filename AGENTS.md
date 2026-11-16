@@ -41,7 +41,7 @@ Pacotes por funcionalidade em `br.com.michael.amigosecreto`: `event`, `participa
 
 ## O que já existe
 
-`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail, o rate limiting e o deploy estão **em produção desde 2026-11-15** (`https://amigo-secreto.barbosalabs.dev`); o Caddy é um stack de borda externo e o registro está em `docs/DEPLOY_CONCLUIDO.md`. P9–P11 foram aplicadas (db 512m, exemplos com aspas, sessão só por cookie); P12 está no template do Caddy. O e-mail foi **ligado e validado ponta a ponta em 2026-11-16** (2 `SENT`, painel **Enviado**, evento de teste apagado). Pendentes: P13 (rate limit dos endpoints de e-mail), P14 (SPF), P15 (deploy da imagem do commit novo), cópia off-site do backup, restore completo, reboot e fluxo no navegador.
+`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail, o rate limiting e o deploy estão **em produção desde 2026-11-15** (`https://amigo-secreto.barbosalabs.dev`); o Caddy é um stack de borda externo e o registro está em `docs/DEPLOY_CONCLUIDO.md`. P9–P11 foram aplicadas (db 512m, exemplos com aspas, sessão só por cookie); P12 está no template do Caddy. O e-mail foi **ligado e validado ponta a ponta em 2026-11-16** (2 `SENT`, painel **Enviado**, evento de teste apagado); o SPF foi publicado e o rate limit dos endpoints de e-mail foi implementado no código no mesmo dia. Pendentes: P15 (deploy da imagem do commit novo, que leva P13), cópia off-site do backup, restore completo, reboot e fluxo no navegador.
 
 ## Agentes do projeto
 
