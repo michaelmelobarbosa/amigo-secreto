@@ -8,11 +8,14 @@
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<header class="site-header" th:fragment="nav">
+<header class="site-header" th:fragment="nav(eventName)">
     <div class="container header-content">
-        <a class="brand" th:href="@{/}">Amigo Secreto</a>
+        <a class="brand" th:href="@{/}" data-nav-home>Amigo Secreto</a>
+        <span class="header-event"
+              th:if="${eventName != null and !#strings.isEmpty(eventName)}"
+              th:text="${eventName}" th:attr="title=${eventName}">Evento</span>
         <nav aria-label="Navegação principal">
-            <a th:href="@{/}">Início</a>
+            <a th:href="@{/}" data-nav-home>Início</a>
         </nav>
     </div>
 </header>
@@ -26,6 +29,7 @@
 <input type="hidden" name="_csrf" th:value="${_csrf}" th:fragment="csrf">
 
 <div th:fragment="scripts">
+    <div class="sr-only" data-copy-status role="status" aria-live="polite"></div>
     <script th:src="@{/js/app.js}" defer></script>
 </div>
 </body>

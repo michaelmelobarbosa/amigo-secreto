@@ -44,7 +44,7 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 - **Expiração automática de eventos antigos** e limpeza de dados pessoais.
 - **Permutação com reciprocidade permitida** (múltiplos ciclos) como opção do evento, além do ciclo único.
 - **Internacionalização** (mensagens, datas e moeda).
-- **Pico.css/HTMX:** o MVP usa CSS próprio; Pico.css e HTMX continuam opcionais.
+- **Pico.css/HTMX:** o MVP usa CSS próprio. Pico não é mais mantido (v2.1.1 final, repositório arquivado em 2026-10-04); HTMX continua opcional. Pesquisa de evolução visual (trilhas, custos e recomendação) em [`UI-VISUAL.md`](UI-VISUAL.md).
 
 ## Riscos aceitos no MVP
 
