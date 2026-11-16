@@ -2,7 +2,7 @@
 
 Aplicação web para organizar amigo secreto **sem login**, com acesso por links que carregam tokens. Serve para uso real (família e trabalho) e como projeto de portfólio, com deploy em VPS própria.
 
-> **Status:** em produção em `https://amigo-secreto.barbosalabs.dev` desde 2026-11-15, com e-mail real ativo e validado em 2026-11-16. MVP funcional com e-mail na fase 2 e rate limiting em memória. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica, envio do link por Brevo e limite de requisições por IP implementados. **164 testes** passando.
+> **Status:** em produção em `https://amigo-secreto.barbosalabs.dev` desde 2026-11-15, com e-mail real ativo e validado em 2026-11-16 e rate limit dos endpoints de e-mail validado em produção. MVP funcional com e-mail na fase 2 e rate limiting em memória. Fluxo de evento, convite, participantes, restrições, sorteio, refazer/reabrir, página do participante, segurança básica, envio do link por Brevo e limite de requisições por IP implementados. **164 testes** passando.
 
 ## Funcionalidades
 
@@ -25,7 +25,7 @@ Aplicação web para organizar amigo secreto **sem login**, com acesso por links
 - Token inválido retorna **404**, sem confirmar existência.
 - CSRF próprio por token de sessão em todos os POSTs (não há Spring Security).
 - Rate limiting em memória por IP em `POST /events`, `/join`, `draw`/`redraw` e wishlist, com `429` + `Retry-After` ([plano e limites](docs/RATE-LIMITING.md)). Validado em produção em 2026-11-15, inclusive contra `X-Forwarded-For` forjado.
-- E-mail real ativo desde 2026-11-16. Os endpoints `links/email` (10/h) e `email/resend` (20/h) têm rate limit no código, que entra em produção com o próximo deploy; a cota do Brevo é 300/dia.
+- E-mail real ativo desde 2026-11-16. Os endpoints `links/email` (10/h) e `email/resend` (20/h) têm rate limit validado em produção (11º POST → `429`); a cota do Brevo é 300/dia.
 - Cookie de sessão `HttpOnly` + `SameSite=Lax`; `Secure` por padrão (o perfil `dev` desativa para HTTP local). A sessão é **só por cookie** (`tracking-modes=cookie`), sem `;jsessionid` na URL.
 - Rotas sensíveis com `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Content-Type-Options`, `X-Frame-Options`, CSP e `X-Robots-Tag`.
 - `robots.txt` bloqueia indexação.
@@ -98,10 +98,11 @@ Em produção, o `docker-compose.prod.yml` passa essas variáveis a partir do `.
 
 O passo a passo completo está em [docs/DEPLOY.md](docs/DEPLOY.md): imagem ARM64 publicada no GHCR pelo CI, `docker-compose.prod.yml` (app + Postgres), healthcheck, backup e restore. O **Caddy é um stack de borda separado**, compartilhado com outras aplicações da VPS; a configuração dele está em [docs/INFRA-VPS.md](docs/INFRA-VPS.md).
 
-**Estado:** deploy executado em **2026-11-15**; registro em
+**Estado:** deploy executado em **2026-11-15** e atualizado para `6898819` em **2026-11-16**; registro em
 [docs/DEPLOY_CONCLUIDO.md](docs/DEPLOY_CONCLUIDO.md). TLS Let's Encrypt, Flyway V1–V3, backup diário
 por systemd timer. O e-mail real foi **ligado e validado ponta a ponta em 2026-11-16** (2 `SENT`,
-painel **Enviado**, evento de teste apagado), com SPF e rate limit dos endpoints de e-mail aplicados.
+painel **Enviado**, evento de teste apagado), com SPF aplicado e rate limit dos endpoints de e-mail
+validado em produção.
 
 ```bash
 cp .env.prod.example .env
