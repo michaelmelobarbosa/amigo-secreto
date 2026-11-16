@@ -6,8 +6,11 @@ app:
     join-per-window: ${RATE_LIMIT_JOIN:30}
     draw-per-window: ${RATE_LIMIT_DRAW:10}
     wishlist-per-window: ${RATE_LIMIT_WISHLIST:30}
+    email-links-per-window: ${RATE_LIMIT_EMAIL_LINKS:10}
+    email-resend-per-window: ${RATE_LIMIT_EMAIL_RESEND:20}
     window: ${RATE_LIMIT_WINDOW:PT10M}
     draw-window: ${RATE_LIMIT_DRAW_WINDOW:PT1H}
+    email-window: ${RATE_LIMIT_EMAIL_WINDOW:PT1H}
     max-keys: ${RATE_LIMIT_MAX_KEYS:10000}
   email:
     enabled: ${EMAIL_ENABLED:false}
