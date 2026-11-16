@@ -57,7 +57,7 @@ Já implementado:
 
 **Bloco 10 (deploy aplicável) concluído:** P1–P6 aplicadas (Postgres de dev em loopback, `mem_limit`/`cpus`, rotação de log, platform args, CI publica ARM64 no GHCR e Compose usa `APP_IMAGE:APP_TAG`). O Caddy foi desacoplado: o Compose do projeto tem só `app` + `db`, a app entra na rede externa `edge` como `amigo-app`, e o stack de borda vive em [`docs/INFRA-VPS.md`](docs/INFRA-VPS.md). Adicionados `scripts/deploy.sh`, `.env.prod.example` com imagem/tag/rede e a imagem de runtime sem `curl` (BusyBox estático para o HEALTHCHECK). O build ARM64 não usa QEMU.
 
-**Bloco 11 (deploy real) concluído:** `https://amigo-secreto.barbosalabs.dev` no ar em 2026-11-15; DNS A na Name.com, Security List Oracle (TCP 80/443 + UDP 443), stack `edge` com `edge-caddy-1`, imagem pública `ghcr.io/michaelmelobarbosa/amigo-secreto:2b6e2d4…`, Flyway V1–V3 e backup diário por systemd timer. Primeira tentativa falhou por `BREVO_FROM_NAME` sem aspas no `.env` (P10), corrigido no servidor. P9–P11 foram aplicadas depois; P12 está no template do Caddy. Em 2026-11-16 o e-mail foi **ligado e validado ponta a ponta**: 2 notificações `SENT`, `attempts=1`, painel **Enviado**, zero erros, evento de teste apagado; o SPF foi publicado no mesmo dia e o rate limit dos endpoints de e-mail ficou no código. Pendentes: deploy da imagem do commit novo (P15, que leva o rate limit), cópia off-site, restore completo, reboot e fluxo no navegador. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
+**Bloco 11 (deploy real) concluído:** `https://amigo-secreto.barbosalabs.dev` no ar em 2026-11-15; DNS A na Name.com, Security List Oracle (TCP 80/443 + UDP 443), stack `edge` com `edge-caddy-1`, imagem pública `ghcr.io/michaelmelobarbosa/amigo-secreto:2b6e2d4…`, Flyway V1–V3 e backup diário por systemd timer. Primeira tentativa falhou por `BREVO_FROM_NAME` sem aspas no `.env` (P10), corrigido no servidor. P9–P11 foram aplicadas depois; P12 foi aplicada e verificada no Caddy em 2026-11-16. Em 2026-11-16 o e-mail foi **ligado e validado ponta a ponta**: 2 notificações `SENT`, `attempts=1`, painel **Enviado**, zero erros, evento de teste apagado; o SPF foi publicado no mesmo dia e o rate limit dos endpoints de e-mail ficou no código. Pendentes: deploy da imagem do commit novo (P15, que leva o rate limit), cópia off-site, restore completo, reboot e fluxo no navegador. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
 
 ---
 
@@ -617,15 +617,16 @@ O que ficou conscientemente fora do MVP está detalhado em [`docs/IDEAS.md`](doc
 - **Testes de concorrência** (draw × draw, última vaga, rollback de redraw/reopen).
 - **P9–P11 aplicadas em 2026-11-15:** `db` com `mem_limit: 512m`/`cpus: "0.5"`, exemplos de `.env`
   com `BREVO_FROM_NAME="Amigo Secreto"` e `tracking-modes: cookie` (teste de URL sem `;jsessionid`).
-- **P12 — Caddy de borda:** o template tem `mem_limit: 256m`; falta aplicar no
-  `/opt/edge/compose.yml` da VPS.
+- **P12 — Caddy de borda (aplicada e verificada em 2026-11-16):** `mem_limit: 256m` no
+  `/opt/edge/compose.yml`, `HostConfig.Memory=268435456`, config-hash idêntico e dry-run sem mudanças.
 - **P13 — rate limit dos endpoints de e-mail (implementado no código em 2026-11-16):**
   `POST /admin/{token}/links/email` (10/h) e `.../participants/{id}/email/resend` (20/h), com janela
   de 1h e baldes separados; entra em produção com P15.
 - **P14 — SPF (aplicada em 2026-11-16):** TXT `v=spf1 include:spf.sendinblue.com -all` em
   `mail.barbosalabs.dev`, verificado no DNS público; DKIM/DMARC já estavam corretos.
-- **P15 — deploy da imagem nova:** a VPS roda `2b6e2d4`; o remoto está em `26bd7f4` (P9–P12), sem
-  imagem publicada. Quando o CI publicar, `APP_TAG=<sha> bash scripts/deploy.sh`.
+- **P15 — deploy da imagem nova:** a VPS roda `2b6e2d4`; o remoto já tem as correções P9–P12 e o
+  P13 está no working tree. Quando o CI publicar a imagem do commit novo,
+  `APP_TAG=<sha> bash scripts/deploy.sh`.
 - **Tokens em texto claro** e `Assignment` em claro no banco: risco aceito do modelo “link = credencial”.
 - **Tokens na URL**: histórico do navegador; `no-store`/`no-referrer` mitigam, não apagam.
 - **E-mail:** o envio está **ligado e validado ponta a ponta em 2026-11-16** (2 `SENT`, `attempts=1`, painel **Enviado**, zero erros, evento de teste apagado); o SPF foi publicado e o rate limit dos endpoints de e-mail ficou no código (entra com P15). Dedupe por endereço (melhor esforço sem verificação) ainda não foi implementado; telefone/WhatsApp API/SMS ficam fora.
