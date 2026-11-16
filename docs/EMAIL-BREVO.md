@@ -1,6 +1,6 @@
 # Fase 2 — e-mail com Brevo
 
-Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e testado; conta/domínio `barbosalabs.dev`/`mail.barbosalabs.dev` autenticados; falta apenas habilitar no deploy e, se desejado, webhooks.
+Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e testado; conta/domínio `barbosalabs.dev`/`mail.barbosalabs.dev` autenticados; **deploy concluído em 2026-11-15 com o e-mail desligado** (`EMAIL_ENABLED=false`, sem API key de produção). Falta habilitar no `.env` e testar a entrega real; webhooks/double opt-in são opcionais.
 
 ## 1. Decisão de arquitetura
 
@@ -56,7 +56,9 @@ Passos:
 
 - **API key:** Settings → SMTP & API → API keys → Generate. Copie na hora; ela só aparece uma vez e começa com `xkeysib-`.
 - Crie chaves separadas para dev/prod; nunca commite.
-- Se ativar **Block unknown IP addresses**, cadastre o IP público da VPS (e o IP de saída real do Docker/NAT) antes de testar; senão o envio falha com 401.
+- Se ativar **Block unknown IP addresses**, cadastre o IP público da VPS (o IP de saída dos containers
+  medido em 2026-11-15 é `<VPS_PUBLIC_IP>`, o mesmo IP público do host) antes de testar; senão o envio
+  falha com 401.
 - **SMTP key** é outra credencial (`smtp-relay.brevo.com`, portas 587/2525 STARTTLS ou 465 SSL). Não confunda com API key. Para este projeto, use API key.
 
 ### 2.4 Onde conseguir domínio grátis sendo estudante
@@ -294,13 +296,14 @@ public void onDrawCompleted(DrawCompletedEvent event) {
 
 ### 5.6 Conteúdo do e-mail
 
-Templates Thymeleaf em `templates/email/result.html` e `result.txt`:
+O conteúdo é montado em Java por [`EmailContentBuilder`](../src/main/java/br/com/michael/amigosecreto/email/EmailContentBuilder.java)
+(não há templates Thymeleaf de e-mail no repositório):
 
 - Assunto: `Seu resultado do amigo secreto — {evento}` (ou “Sorteio refeito”).
 - Corpo: “Olá, {nome}. Seu resultado está pronto.” + link absoluto + “Guarde este link; ele é a única forma de ver seu resultado. Não compartilhe.”
 - Não inclua a wishlist no e-mail; ela já aparece na página e pode mudar. Inclua o link.
 - HTML com CSS inline simples; texto puro como fallback. Não use imagens/pixel.
-- Escaping: nomes e wishlist via `th:text` (nunca `th:utext` com dado de usuário).
+- Escaping: o builder escapa nomes e wishlist no HTML; não há `th:utext` em jogo.
 - O link vem do `LinkBuilder` (`app.base-url`), nunca do request assíncrono.
 - Pode incluir `{{params}}`? Não; renderize no app e envie `htmlContent`/`textContent`. Isso mantém o conteúdo versionado no Git.
 
@@ -347,6 +350,8 @@ Brevo **não assina** webhooks. Para usar:
 
 ## 8. Operação e monitoramento
 
+- **Estado em 2026-11-15:** deploy concluído com `EMAIL_ENABLED=false` e `BREVO_API_KEY` vazio;
+  nenhum e-mail foi enviado. O IP de saída dos containers é `<VPS_PUBLIC_IP>`.
 - Guarde `BREVO_API_KEY` no `.env`/secret manager; nunca no Git, imagem Docker ou log.
 - Se ativar bloqueio de IP, cadastre o IP da VPS; confirme o IP de saída do container.
 - Monitore **Transactional → Logs** e a cota diária; 100 resultados + refazer = 200.
@@ -365,12 +370,13 @@ Brevo **não assina** webhooks. Para usar:
 - [x] Migrações V2/V3 com `Participant.email` e `notification`.
 - [x] `EmailProperties`, `EmailSender`, `BrevoEmailSender`, `LoggingEmailSender`.
 - [x] Listener de `DrawCompletedEvent` + outbox + worker + retry/idempotência.
-- [x] Templates HTML/texto com link absoluto e aviso de privacidade.
+- [x] Templates HTML/texto com link absoluto e aviso de privacidade (via `EmailContentBuilder`).
 - [x] Painel com status e reenvio; join com e-mail opcional.
 - [x] Testes unitários/integração + sandbox + um envio real.
 - [x] Runbook no README/DEPLOY (env, IP allowlist, cota, rotação).
+- [x] Deploy em produção em 2026-11-15 com o e-mail desligado (`EMAIL_ENABLED=false`, sem API key).
 - [ ] Habilitar `EMAIL_ENABLED=true`/`BREVO_SANDBOX=false` no `.env` de produção.
-- [ ] Criar a API key de produção separada e, se usar, liberar o IP da VPS.
+- [ ] Criar a API key de produção separada e, se usar allowlist, liberar `<VPS_PUBLIC_IP>`.
 - [ ] Opcional: webhooks de delivered/bounce e double opt-in.
 
 ## 10. Decisões que ainda podem ser tomadas
