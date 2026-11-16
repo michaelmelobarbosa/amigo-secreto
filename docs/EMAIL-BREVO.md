@@ -1,6 +1,6 @@
 # Fase 2 — e-mail com Brevo
 
-Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e testado; conta/domínio `barbosalabs.dev`/`mail.barbosalabs.dev` autenticados; **deploy concluído em 2026-11-15 com o e-mail desligado** (`EMAIL_ENABLED=false`, sem API key de produção). Falta habilitar no `.env` e testar a entrega real; webhooks/double opt-in são opcionais.
+Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e **em produção, ligado e validado ponta a ponta em 2026-11-16**: 2 notificações `SENT` com `attempts=1`, painel exibindo **Enviado**, sem erro/retentativa, e evento de teste apagado. A chave de produção é restrita a envio (`GET /v3/account` → 403 é esperado). Pendências: **SPF** no subdomínio de envio e **rate limit** nos endpoints de e-mail do painel; webhooks/double opt-in são opcionais.
 
 ## 1. Decisão de arquitetura
 
@@ -48,14 +48,26 @@ Passos:
 4. No DNS:
    - Cloudflare: deixe os CNAMEs de DKIM **DNS only** (cinza), sem proxy e sem CNAME flattening.
    - Não crie um segundo registro DMARC: dois registros invalidam a avaliação.
-   - Em IP compartilhado, **não adicione `include:spf.brevo.com`** só por causa do Brevo. O Return-Path é da Brevo e o DMARC passa por DKIM; SPF só entra em subdomínio dedicado/IP dedicado, com os valores que a Brevo fornecer.
+   - No **subdomínio dedicado de envio** (`mail.barbosalabs.dev`), publique o SPF indicado pelo Brevo:
+     `mail.barbosalabs.dev TXT "v=spf1 include:spf.sendinblue.com -all"` (confirme o valor atual na
+     aba de autenticação; pode variar). Não crie dois SPF para o mesmo nome.
+   - Em IP compartilhado no domínio raiz, **não adicione o include só por causa do Brevo**: o
+     Return-Path é da Brevo e o DMARC passa por DKIM. O SPF do subdomínio dedicado é o que fecha a
+     autenticação.
 5. Clique em **Authenticate this email domain** e aguarde a propagação (pode levar até 48h).
 6. Crie o remetente em **Senders** com o endereço exato do domínio autenticado. O `From` tem que ser do domínio autenticado; se autenticou `mail.exemplo.com`, não envie de `@exemplo.com`.
+
+> **Estado em 2026-11-16:** Brevo code, DKIM (`brevo1`/`brevo2`) e DMARC estão publicados; **falta o
+> SPF** em `mail.barbosalabs.dev`. A entrega funciona por DKIM/DMARC (foi validada em produção), mas
+> sem SPF a reputação fica mais frágil. Crie o TXT acima e confirme no Brevo.
 
 ### 2.3 Credenciais
 
 - **API key:** Settings → SMTP & API → API keys → Generate. Copie na hora; ela só aparece uma vez e começa com `xkeysib-`.
 - Crie chaves separadas para dev/prod; nunca commite.
+- A chave de produção pode ser **restrita a envio** (escopo de e-mail transacional). Nesse caso,
+  `GET /v3/account` retorna **403 `permission_denied`**; isso é esperado e é menor privilégio. Valide a
+  chave por um envio em sandbox (`X-Sib-Sandbox: drop`) ou um e-mail real.
 - Se ativar **Block unknown IP addresses**, cadastre o IP público da VPS (o IP de saída dos containers
   medido em 2026-11-15 é `<VPS_PUBLIC_IP>`, o mesmo IP público do host) antes de testar; senão o envio
   falha com 401.
@@ -352,6 +364,12 @@ Brevo **não assina** webhooks. Para usar:
 
 - **Estado em 2026-11-15:** deploy concluído com `EMAIL_ENABLED=false` e `BREVO_API_KEY` vazio;
   nenhum e-mail foi enviado. O IP de saída dos containers é `<VPS_PUBLIC_IP>`.
+- **Atualização em 2026-11-16:** e-mail **ligado e validado ponta a ponta** em produção.
+  `.env` com `EMAIL_ENABLED=true`, `EMAIL_WORKER_ENABLED=true`, `BREVO_SANDBOX=false` e a chave em
+  `600`; container `amigo-app` healthy. Teste real com 2 participantes: as duas notificações ficaram
+  `SENT`, `attempts=1`, com `provider_message_id`, e o painel exibiu **Enviado**; nenhum erro/aviso
+  do Brevo no log. O evento de teste foi apagado e o banco voltou a 0 eventos/0 participantes/0
+  notificações/0 assignments. A chave é restrita a envio (`GET /v3/account` → 403 esperado).
 - Guarde `BREVO_API_KEY` no `.env`/secret manager; nunca no Git, imagem Docker ou log.
 - Se ativar bloqueio de IP, cadastre o IP da VPS; confirme o IP de saída do container.
 - Monitore **Transactional → Logs** e a cota diária; 100 resultados + refazer = 200.
@@ -360,12 +378,86 @@ Brevo **não assina** webhooks. Para usar:
 - Faça um envio real de teste após qualquer mudança de DNS/domínio.
 - Se o plano grátis ficar apertado, o próximo passo é Starter; não tente burlar a cota com múltiplas contas.
 
+### 8.1 Ativação em produção
+
+> Executado e validado em 2026-11-16. O roteiro abaixo serve para uma nova VPS, uma rotação de chave
+> ou uma reconstrução do ambiente.
+
+1. Crie a **API key de produção** no Brevo (Settings → SMTP & API → API keys), separada da usada em
+   dev. Ela começa com `xkeysib-` e pode ser restrita ao escopo de envio.
+2. Se a conta usar **allowlist de IP**, cadastre `<VPS_PUBLIC_IP>` (IP público/saída da VPS).
+3. No `/opt/amigo-secreto/.env`:
+   ```bash
+   EMAIL_ENABLED=true
+   EMAIL_WORKER_ENABLED=true
+   BREVO_SANDBOX=false
+   BREVO_API_KEY=xkeysib-...
+   BREVO_FROM_EMAIL=no-reply@mail.barbosalabs.dev
+   BREVO_FROM_NAME="Amigo Secreto"
+   ```
+4. Recrie a app:
+   ```bash
+   cd /opt/amigo-secreto
+   sg docker -c 'docker compose -f docker-compose.prod.yml up -d app'
+   ```
+5. Confira o arranque sem a chave no log:
+   ```bash
+   sg docker -c 'docker compose -f docker-compose.prod.yml logs --tail=100 app | grep -i -E "email|brevo|notification"'
+   ```
+
+Se `EMAIL_ENABLED=true` e `BREVO_API_KEY`/`BREVO_FROM_EMAIL` estiverem vazios, o startup **falha**
+(fail-fast do `BrevoEmailSender`). O `.env.prod.example` continua com `EMAIL_ENABLED=false` por padrão
+para não quebrar um deploy sem chave.
+
+### 8.2 Teste de fumaça
+
+**Direto no Brevo** (na VPS, na raiz do projeto, com o `.env` de produção):
+```bash
+TEST_EMAIL=seu@email.com bash scripts/check-brevo.sh
+```
+O script tenta `GET /v3/account`; uma chave restrita a envio retorna **403 `permission_denied`** e o
+script segue para o teste de envio. Com `BREVO_SANDBOX=true`, ele envia com `X-Sib-Sandbox: drop` e
+não entrega; com `false`, entrega de verdade. `201/202` = aceito; `401` = chave; `429` = cota. Ele
+não imprime a API key.
+
+> A validação de produção de 2026-11-16 foi feita pelo Hermes com a chave restrita a envio: sandbox
+> `201`, depois dois envios reais `SENT`. Se você rodar o script na VPS, confirme o IP
+> `<VPS_PUBLIC_IP>` e a allowlist, se estiver ativa.
+
+**Pela aplicação** (mesmo caminho do botão do painel):
+```bash
+TEST_EMAIL=seu@email.com bash scripts/smoke-email.sh
+```
+O script:
+- cria um evento temporário;
+- envia os três links pelo `OrganizerLinksMailer` (Brevo real);
+- espera o flash “Links enviados para o e-mail informado.”;
+- apaga o evento no final;
+- não imprime o token do painel.
+
+Se aparecer “O envio de e-mail está desativado”, o `.env` ainda está com `EMAIL_ENABLED=false`. Se
+aparecer “Links aceitos em modo sandbox”, `BREVO_SANDBOX=true` e nada foi entregue.
+
+> O teste de produção de 2026-11-16 foi feito via API/UI porque os scripts ainda **não estavam no
+> remoto**. Eles estão no working tree deste repositório e precisam entrar no próximo commit/deploy.
+
+**Fluxo completo do sorteio:** crie um evento, adicione um participante com e-mail, sorteie e confira
+o status **Enviado** no painel e o **Transactional Logs** do Brevo. O worker roda a cada 30s; o painel
+mostra `Pendente`, `Enviado`, `Falhou` ou `Ignorado`, e `notification.last_error` guarda o erro do
+provedor. Esse é o teste que cobre outbox + worker, além do adaptador.
+
+> **Cota e abuso (prioridade):** o plano grátis tem 300 e-mails/dia. Um sorteio de 100 participantes
+> usa 100; cada refazer usa mais 100 — dois refazeres no mesmo dia estouram a cota. Com o e-mail
+> ligado, os endpoints `POST /admin/{token}/links/email` e
+> `POST /admin/{token}/participants/{id}/email/resend` **ainda não têm rate limit**; eles podem
+> queimar a cota e a reputação do domínio. Esse é o próximo item de segurança.
+
 ## 9. Checklist de implementação
 
 - [x] Conta Brevo aprovada e envio real testado.
 - [x] Domínio de envio autenticado (Brevo code + DKIM + DMARC; sem SPF include em IP compartilhado).
 - [x] Sender `no-reply@mail.barbosalabs.dev` criado e `From` alinhado ao domínio.
-- [x] API key criada e guardada fora do Git.
+- [x] API key de **dev** criada e guardada fora do Git.
 - [x] Teste de `/v3/account` e envio sandbox.
 - [x] Migrações V2/V3 com `Participant.email` e `notification`.
 - [x] `EmailProperties`, `EmailSender`, `BrevoEmailSender`, `LoggingEmailSender`.
@@ -375,8 +467,12 @@ Brevo **não assina** webhooks. Para usar:
 - [x] Testes unitários/integração + sandbox + um envio real.
 - [x] Runbook no README/DEPLOY (env, IP allowlist, cota, rotação).
 - [x] Deploy em produção em 2026-11-15 com o e-mail desligado (`EMAIL_ENABLED=false`, sem API key).
-- [ ] Habilitar `EMAIL_ENABLED=true`/`BREVO_SANDBOX=false` no `.env` de produção.
-- [ ] Criar a API key de produção separada e, se usar allowlist, liberar `<VPS_PUBLIC_IP>`.
+- [x] API key de produção validada em 2026-11-16 por sandbox `201` e por envios reais (`GET /account` 403 é esperado em chave restrita).
+- [x] E-mail habilitado em produção (`EMAIL_ENABLED=true`, `BREVO_SANDBOX=false`, worker ativo).
+- [x] Teste ponta a ponta com 2 participantes: `SENT`, `attempts=1`, painel **Enviado**, zero erros; evento de teste apagado.
+- [ ] Confirmar se a chave usada é separada da de dev (recomendado).
+- [ ] Criar o SPF de `mail.barbosalabs.dev` no DNS (DKIM/DMARC já estão corretos).
+- [ ] Rate limit em `POST /admin/{token}/links/email` e `.../participants/{id}/email/resend`.
 - [ ] Opcional: webhooks de delivered/bounce e double opt-in.
 
 ## 10. Decisões que ainda podem ser tomadas

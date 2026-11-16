@@ -1,6 +1,7 @@
 package br.com.michael.amigosecreto.email;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
@@ -165,6 +166,34 @@ class BrevoEmailSenderTest {
         assertThat(result.errorCode()).isEqualTo("unauthorized");
         assertThat(result.errorMessage()).contains("Brevo HTTP 401");
         server.verify();
+    }
+
+    @Test
+    void missingApiKeyFailsFastWhenEmailIsEnabled() {
+        EmailProperties properties = new EmailProperties(
+                true,
+                "no-reply@mail.example.com",
+                "Amigo Secreto",
+                null,
+                new EmailProperties.Brevo("", false));
+
+        assertThatThrownBy(() -> new BrevoEmailSender(properties))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("BREVO_API_KEY");
+    }
+
+    @Test
+    void missingFromEmailFailsFastWhenEmailIsEnabled() {
+        EmailProperties properties = new EmailProperties(
+                true,
+                "",
+                "Amigo Secreto",
+                null,
+                new EmailProperties.Brevo(API_KEY, false));
+
+        assertThatThrownBy(() -> new BrevoEmailSender(properties))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("from-email");
     }
 
     private static RestClient.Builder restClientBuilder() {
