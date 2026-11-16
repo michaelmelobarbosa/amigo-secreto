@@ -365,7 +365,8 @@ Não foram abertas portas `5432`, `8080` ou `2019`; egress rules não foram alte
 ## 8. Pendências de código no repositório (para o agente de código)
 
 > **Atualização posterior (2026-11-15):** P9, P10 e P11 foram aplicadas ao repositório; P12 foi
-> incluída no template do stack de borda e precisa ser aplicada no `/opt/edge/compose.yml` da VPS.
+> incluída no template do stack de borda e **aplicada e verificada no `/opt/edge/compose.yml` da VPS**
+> em 2026-11-16 (`HostConfig.Memory=268435456`, config-hash idêntico, dry-run sem mudanças).
 > Ver [`DEPLOY.md#pendências-abertas-após-o-deploy`](./DEPLOY.md#pendências-abertas-após-o-deploy).
 >
 > **Atualização de 2026-11-16:** a API key de produção foi validada e o e-mail foi **ligado e
@@ -417,10 +418,12 @@ server:
       tracking-modes: cookie   # remove o ;jsessionid= das URLs
 ```
 
-### P12 (opcional) — `mem_limit`/healthcheck do Caddy e política de imagem
+### P12 (aplicado) — `mem_limit` do Caddy
 
-O `edge/compose.yml` (fora do repo) não tem `mem_limit` no Caddy. Se quiserem padronizar limites em
-todos os serviços, vale um bloco análogo (ex.: `mem_limit: 256m`).
+O `/opt/edge/compose.yml` está com `mem_limit: 256m` no Caddy desde 2026-11-15. Verificação de
+2026-11-16: `HostConfig.Memory=268435456` (256 MiB), config-hash do container igual ao Compose,
+`up -d --dry-run` sem mudanças e consumo de ~11,5 MiB de 256 MiB. O `config` isolado mostra a
+intenção; o `--dry-run`/config-hash é o que confirma que o container em execução reflete o arquivo.
 
 ---
 
@@ -534,7 +537,8 @@ systemctl list-timers amigo-secreto-backup.timer                                
 - `docs/DEPLOY.md`, `docs/INFRA-VPS.md`, `docs/RATE-LIMITING.md`, `docs/EMAIL-BREVO.md` (repo).
 - Commit em produção no deploy de 2026-11-15: `2b6e2d4fc13d98eb67cfcd4bd91899957a028206` ("Merge pull
   request #13 from michaelmelobarbosa/dev"). No teste de e-mail de 2026-11-16, a VPS ainda estava
-  nesse commit; o remoto já estava em `26bd7f4` (P9–P12), mas sem imagem publicada para esse SHA.
+  nesse commit; o remoto já estava em `26bd7f4` (P9–P12) e depois avançou para `68e0476`, mas sem
+  imagem publicada para o commit novo.
 - CI: `.github/workflows/ci.yml` — job `image` publica `linux/arm64` com tag `:<sha>`; PR só testa.
 
 ---
@@ -568,8 +572,8 @@ Execução pelo Hermes, com autorização do dono.
   `POST /admin/{token}/participants/{id}/email/resend` (20/h) foram incluídos no `RateLimitFilter`
   em 2026-11-16, com janela de 1h e baldes separados, para proteger a cota de 300/dia e a reputação
   do domínio. Entram em produção com o deploy da imagem nova (P15).
-- **Imagem/deploy:** a VPS roda `2b6e2d4`; o remoto está em `26bd7f4` (P9–P12) e ainda não havia
-  imagem publicada para esse SHA. Quando o CI publicar, o deploy é
+- **Imagem/deploy:** a VPS roda `2b6e2d4`; o remoto já tem P9–P12 e avançou para `68e0476`, mas ainda
+  não havia imagem publicada para o commit novo. Quando o CI publicar, o deploy é
   `APP_TAG=<novo-sha> bash scripts/deploy.sh`.
 - **Cota:** 300 e-mails/dia no plano grátis. Um sorteio de 100 participantes usa 100; cada refazer
   usa mais 100 — dois refazeres no mesmo dia estouram a cota.
