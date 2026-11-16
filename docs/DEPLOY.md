@@ -44,7 +44,8 @@ Caddy, em um stack separado, fica exposto.
   completo em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md).
 - **E-mail real ativo e validado em 2026-11-16:** 2 notificações `SENT`, `attempts=1`, painel
   **Enviado**, zero erro/retentativa; chave de produção restrita a envio. SPF publicado; rate limit
-  dos endpoints de e-mail no código (`links/email` 10/h, `email/resend` 20/h), entra com P15.
+  dos endpoints de e-mail em produção (`links/email` 10/h, `email/resend` 20/h), validado no deploy
+  `6898819` (P15).
 - **Dois containers neste projeto**: `db` (Postgres 17) e `app` (Spring Boot). O Caddy é um
   **stack de borda separado**, compartilhado com outras aplicações da VPS; o porquê está em
   [Decisões](#decisões-de-arquitetura-com-justificativa) e em [`INFRA-VPS.md`](./INFRA-VPS.md).
@@ -577,7 +578,8 @@ O primeiro não passa pela aplicação; o segundo usa o mesmo `EmailSender` do p
 com outbox/worker é o sorteio acima.
 
 > Os scripts `check-brevo.sh` e `smoke-email.sh` foram adicionados ao repositório. No teste de
-> 2026-11-16 eles ainda não estavam no remoto, então o Hermes fez o equivalente via API/UI.
+> 2026-11-16 eles ainda não estavam no remoto, então o Hermes fez o equivalente via API/UI; hoje estão
+> no clone da VPS (deploy `6898819`).
 
 > A cota do plano grátis é 300 e-mails/dia. Um evento de 100 participantes com um refazer gera 200
 > envios; dois refazeres no mesmo dia estouram a cota. O worker tenta de novo depois, mas o provedor
@@ -707,8 +709,8 @@ docker rm -f restore-test
   cinco primeiros `POST /events` passaram, o sexto retornou `429` com `Retry-After: 600`, e
   `X-Forwarded-For` forjado (`9.9.9.9`, `8.8.4.4`) não criou bucket novo.
 - **E-mail real ativo:** `POST /admin/{token}/links/email` e
-  `POST /admin/{token}/participants/{id}/email/resend` têm rate limit no código (10/h e 20/h, janela
-  de 1h), que entra em produção com P15. A cota do Brevo é 300/dia.
+  `POST /admin/{token}/participants/{id}/email/resend` têm rate limit em produção (10/h e 20/h, janela
+  de 1h), validado em 2026-11-16. A cota do Brevo é 300/dia.
 - **`ubuntu` no grupo `docker` = root equivalente.** O acesso ao socket do Docker permite controlar
   todos os containers. Aceito para operação single-tenant.
 - **HSTS com `includeSubDomains`** está ativo: subdomínios de `amigo-secreto.barbosalabs.dev` ficam
@@ -787,8 +789,9 @@ O que continua **fora do repositório** está na seção
 ### Pendências abertas após o deploy
 
 Estas foram encontradas na execução real. **P9–P11 foram aplicadas em 2026-11-15**; P12 foi
-aplicada e verificada na VPS em 2026-11-16; P13 foi implementada no código em 2026-11-16 (rate limit
-dos endpoints de e-mail); P14 (SPF) foi aplicada no mesmo dia; P15 é operacional.
+aplicada e verificada na VPS em 2026-11-16; P13 foi implementada e validada em produção em
+2026-11-16 (rate limit dos endpoints de e-mail); P14 (SPF) foi aplicada no mesmo dia; P15 foi
+aplicado em 2026-11-16 (VPS em `6898819`).
 
 | # | Pendência | Onde | Estado / ação |
 | --- | --- | --- | --- |
@@ -796,9 +799,9 @@ dos endpoints de e-mail); P14 (SPF) foi aplicada no mesmo dia; P15 é operaciona
 | **P10** | `.env.example`/`.env.prod.example` quebram `source .env` | ambos | **aplicado**: `BREVO_FROM_NAME="Amigo Secreto"` nos dois; `deploy.sh` valida o `.env` |
 | **P11** | `;jsessionid` na URL quando não há cookie | `application.yaml` | **aplicado**: `tracking-modes: cookie` + `SessionTrackingIntegrationTest` |
 | **P12** | Caddy de borda sem `mem_limit` | `/opt/edge/compose.yml` (externo) | **aplicado e verificado em 2026-11-16**: `mem_limit: 256m`, `HostConfig.Memory=268435456`, config-hash igual e `up -d --dry-run` sem mudanças |
-| **P13** | Endpoints de e-mail sem rate limit | `common/web/RateLimitFilter` | **implementado no código em 2026-11-16**: `links/email` 10/h e `email/resend` 20/h, janela própria e testes; entra em produção com P15 |
+| **P13** | Endpoints de e-mail sem rate limit | `common/web/RateLimitFilter` | **aplicado e validado em produção em 2026-11-16**: `links/email` 10/h e `email/resend` 20/h; teste live 10×403 + 11º **429** com `Retry-After` |
 | **P14** | SPF ausente no subdomínio de envio | DNS de `mail.barbosalabs.dev` | **aplicado em 2026-11-16**: TXT `v=spf1 include:spf.sendinblue.com -all`, verificado no DNS público |
-| **P15** | VPS no commit `2b6e2d4`; imagem do commit novo não publicada | deploy | quando o CI publicar a imagem do novo SHA, `APP_TAG=<sha> bash scripts/deploy.sh` |
+| **P15** | VPS no commit `2b6e2d4`; imagem do commit novo | deploy | **aplicado em 2026-11-16**: VPS em `6898819`, imagem ARM64 publicada, app/db healthy e Flyway V1–V3 |
 
 Detalhes e reprodução em [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §8.
 
@@ -845,7 +848,7 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | Backup | ✅ | systemd timer, 03:15, retenção 14 dias |
 | E-mail Brevo | ✅ | ligado e validado ponta a ponta; chave restrita a envio |
 | SPF do subdomínio de envio | ✅ | TXT `v=spf1 include:spf.sendinblue.com -all` em `mail.barbosalabs.dev`, verificado em 2026-11-16 |
-| Rate limit dos endpoints de e-mail | ✅ (código) | `links/email` 10/h e `email/resend` 20/h; entra em produção com P15 |
+| Rate limit dos endpoints de e-mail | ✅ | `links/email` 10/h e `email/resend` 20/h, validado em produção (429) |
 | Cópia off-site do backup | ❌ | backup só na VPS |
 | Restore completo | ❌ | só `pg_restore --list` foi validado |
 | Reboot da VPS | ❌ | não testado |
@@ -921,7 +924,8 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
   público; DKIM e DMARC já estavam corretos.
 - **Rate limit:** `POST /admin/{token}/links/email` (10/h) e
   `POST /admin/{token}/participants/{id}/email/resend` (20/h), com janela de 1h, para proteger a cota
-  de 300/dia e a reputação do domínio; está no código e entra em produção com P15.
+  de 300/dia e a reputação do domínio; está em produção desde o deploy `6898819` e foi validado em
+  2026-11-16 (11º POST → `429`).
 
 ### 7. Backup e restore (parcial)
 
@@ -939,8 +943,6 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
   `DOCKER-USER` no topo, HTTPS 200 e `systemctl list-timers`.
 - Criar um evento real de teste pelo navegador e apagar depois (o fluxo HTTP já foi exercitado).
 - Configurar monitoração externa (ex.: Uptime Kuma/healthchecks.io) apontando para `/`.
-- Quando o CI publicar a imagem do commit novo, rodar
-  `APP_TAG=<sha> bash scripts/deploy.sh` (P15).
 - `git fetch --unshallow` se precisar de histórico/rollback por commit.
 - `docker rmi hello-world alpine:3.20` para limpar as imagens de teste.
 - Opcional: CD com `appleboy/ssh-action` rodando `scripts/deploy.sh` com `APP_TAG=$GITHUB_SHA`.
@@ -949,7 +951,6 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 
 | Item | Status | Como fechar |
 | --- | --- | --- |
-| Deploy da imagem do commit novo | ❌ | aguardar o CI publicar o SHA e rodar `deploy.sh` |
 | Cópia off-site do backup | ❌ | `rclone`/`rsync` para storage externo |
 | Restore completo | ❌ | banco descartável + `restore-postgres.sh` |
 | Reboot da VPS | ❌ | reiniciar e conferir containers, iptables, HTTPS e timer |
@@ -961,8 +962,8 @@ Tudo abaixo vive na VPS ou em serviços externos; segredos não entram no reposi
 | Deploy automatizado (CD) | ❌ | opcional |
 | Atualização de imagens base | ❌ | `docker compose pull` periódico; avaliar fixar digest |
 
-**Pendências de código/configuração:** P9–P11 aplicadas; P12 (Caddy `mem_limit`) aplicada e verificada
-na VPS em 2026-11-16; P13 (rate limit dos endpoints de e-mail) foi implementado no código e P14 (SPF)
-foi aplicada em 2026-11-16; P15 é o deploy da imagem do commit novo. A suíte de **164 testes** e os
+**Estado das pendências:** P9–P11 aplicadas; P12 (Caddy `mem_limit`) aplicada e verificada
+na VPS em 2026-11-16; P13 (rate limit dos endpoints de e-mail) implementado e validado em produção;
+P14 (SPF) aplicada no mesmo dia; P15 aplicado (VPS em `6898819`). A suíte de **164 testes** e os
 testes de produção de 2026-11-15/16 cobrem o fluxo funcional em nível de aplicação, mas não substituem
 o teste no navegador.

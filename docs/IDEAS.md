@@ -8,7 +8,7 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
   em `/events`, `/join/{inviteCode}`, sorteio, wishlist e nos endpoints de e-mail (`links/email` 10/h,
   `email/resend` 20/h), em memória, com `429` + `Retry-After`. A validação real confirmou o IP do
   cliente atrás do Caddy e que `X-Forwarded-For` forjado não cria bucket novo. O rate limit de e-mail
-  está no código e entra em produção com P15. Limite diário, Redis e WAF continuam fora:
+  foi validado em produção (10×403 + 11º 429). Limite diário, Redis e WAF continuam fora:
   [`RATE-LIMITING.md`](RATE-LIMITING.md).
 - **Hash dos tokens** no banco e links de uso único/expiração. O MVP guarda os tokens em claro porque o painel precisa copiá-los; mitigar exige mudar a UX de compartilhamento.
 - **Regenerar o token individual** de um participante (revogar um link que vazou). Hoje só o `inviteCode` é regenerável.
@@ -37,7 +37,7 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
   Brevo no plano grátis, subdomínio `mail.barbosalabs.dev` com SPF/DKIM/DMARC, outbox assíncrono,
   retentativas e status/reenvio no painel. **Ligado e validado ponta a ponta em 2026-11-16** (2
   `SENT`, `attempts=1`, painel **Enviado**, evento de teste apagado). SPF aplicado e rate limit dos
-  endpoints de e-mail no código; entra em produção com P15. Guia completo em [`docs/EMAIL-BREVO.md`](EMAIL-BREVO.md).
+  endpoints de e-mail validado em produção. Guia completo em [`docs/EMAIL-BREVO.md`](EMAIL-BREVO.md).
 - **Telefone/WhatsApp:** WhatsApp Cloud API é paga para mensagens utility iniciadas pelo negócio; SMS é pago; Telegram é grátis mas exige que cada pessoa inicie o bot. O MVP mantém o `wa.me` manual.
 - **Recuperação automática de link** (conta/login do organizador) e double opt-in, se o e-mail virar canal principal. Hoje existe apenas o envio avulso dos links para um endereço digitado no painel.
 - **Organizador pode optar por não participar do sorteio.** Hoje ele sempre participa.
@@ -59,6 +59,6 @@ Coisas conscientemente deixadas para depois do MVP. Nada aqui é compromisso de 
 - Backup só na VPS: cópia off-site ainda não existe; a perda da VPS leva o banco junto.
 - Qualquer container na rede `edge` alcança `amigo-app:8080` e pode forjar `X-Forwarded-*`; o banco está na rede privada.
 - `db` limitado a `mem_limit: 512m`: um pico do Postgres não compete com a app e com o Hermes.
-- Cota do Brevo no plano grátis é 300/dia; um sorteio de 100 + dois refazeres estoura. Os endpoints de e-mail têm rate limit no código (10/h e 20/h), mas a cota diária ainda não tem teto separado.
+- Cota do Brevo no plano grátis é 300/dia; um sorteio de 100 + dois refazeres estoura. Os endpoints de e-mail têm rate limit (10/h e 20/h), mas a cota diária ainda não tem teto separado.
 - Testes em H2: Flyway e `ddl-auto=validate` foram provados no Postgres real no deploy; o comportamento de locks sob concorrência ainda só tem cobertura H2.
 - CSS próprio em vez de Pico.css: o layout é funcional, mas o guia visual não é o Pico.

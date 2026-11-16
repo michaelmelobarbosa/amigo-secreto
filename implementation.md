@@ -33,7 +33,7 @@ Já implementado:
 - Portfólio: `README.md`, `docs/IDEAS.md` e CI em `.github/workflows/ci.yml`.
 - Testes do solver, token, link, mapeamento JPA, serviços, fluxos web com MockMvc, adaptador Brevo, outbox, e-mail e rate limiting (164 testes).
 
-**Deploy real concluído em 2026-11-15:** `https://amigo-secreto.barbosalabs.dev` no ar com TLS Let's Encrypt, Flyway V1–V3 em Postgres 17, `amigo-app` + `amigo-secreto-db-1` sem portas publicadas, Caddy de borda `edge-caddy-1` e backup diário por systemd timer. Imagem pública no GHCR (`2b6e2d4…`). Registro completo em [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
+**Deploy real concluído em 2026-11-15:** `https://amigo-secreto.barbosalabs.dev` no ar com TLS Let's Encrypt, Flyway V1–V3 em Postgres 17, `amigo-app` + `amigo-secreto-db-1` sem portas publicadas, Caddy de borda `edge-caddy-1` e backup diário por systemd timer. Imagem pública no GHCR (hoje em `6898819…`, atualizada em 2026-11-16). Registro completo em [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
 
 **Bloco 0 (base) concluído:** POM final, `docker-compose.yml` (Postgres 17), Flyway V1, `application.yaml`/`application-test.yaml`, `ddl-auto=validate` e `.env.example`. `mvnw test` verde e a V1 aplicada no H2. Na época, o Compose de dev não foi executado porque o Docker não estava instalado na máquina de desenvolvimento; a VPS tem Docker desde o deploy de 2026-11-15.
 
@@ -57,7 +57,7 @@ Já implementado:
 
 **Bloco 10 (deploy aplicável) concluído:** P1–P6 aplicadas (Postgres de dev em loopback, `mem_limit`/`cpus`, rotação de log, platform args, CI publica ARM64 no GHCR e Compose usa `APP_IMAGE:APP_TAG`). O Caddy foi desacoplado: o Compose do projeto tem só `app` + `db`, a app entra na rede externa `edge` como `amigo-app`, e o stack de borda vive em [`docs/INFRA-VPS.md`](docs/INFRA-VPS.md). Adicionados `scripts/deploy.sh`, `.env.prod.example` com imagem/tag/rede e a imagem de runtime sem `curl` (BusyBox estático para o HEALTHCHECK). O build ARM64 não usa QEMU.
 
-**Bloco 11 (deploy real) concluído:** `https://amigo-secreto.barbosalabs.dev` no ar em 2026-11-15; DNS A na Name.com, Security List Oracle (TCP 80/443 + UDP 443), stack `edge` com `edge-caddy-1`, imagem pública `ghcr.io/michaelmelobarbosa/amigo-secreto:2b6e2d4…`, Flyway V1–V3 e backup diário por systemd timer. Primeira tentativa falhou por `BREVO_FROM_NAME` sem aspas no `.env` (P10), corrigido no servidor. P9–P11 foram aplicadas depois; P12 foi aplicada e verificada no Caddy em 2026-11-16. Em 2026-11-16 o e-mail foi **ligado e validado ponta a ponta**: 2 notificações `SENT`, `attempts=1`, painel **Enviado**, zero erros, evento de teste apagado; o SPF foi publicado no mesmo dia e o rate limit dos endpoints de e-mail ficou no código. Pendentes: deploy da imagem do commit novo (P15, que leva o rate limit), cópia off-site, restore completo, reboot e fluxo no navegador. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
+**Bloco 11 (deploy real) concluído:** `https://amigo-secreto.barbosalabs.dev` no ar em 2026-11-15; DNS A na Name.com, Security List Oracle (TCP 80/443 + UDP 443), stack `edge` com `edge-caddy-1`, imagem pública `ghcr.io/michaelmelobarbosa/amigo-secreto:2b6e2d4…`, Flyway V1–V3 e backup diário por systemd timer. Primeira tentativa falhou por `BREVO_FROM_NAME` sem aspas no `.env` (P10), corrigido no servidor. P9–P11 foram aplicadas depois; P12 foi aplicada e verificada no Caddy em 2026-11-16. Em 2026-11-16 o e-mail foi **ligado e validado ponta a ponta**: 2 notificações `SENT`, `attempts=1`, painel **Enviado**, zero erros, evento de teste apagado; o SPF foi publicado no mesmo dia. No mesmo dia o deploy `6898819` (P15) levou o rate limit dos endpoints de e-mail para produção, onde foi validado (10×403 + 11º 429 com `Retry-After`). Pendentes: cópia off-site, restore completo, reboot e fluxo no navegador. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
 
 ---
 
@@ -619,16 +619,17 @@ O que ficou conscientemente fora do MVP está detalhado em [`docs/IDEAS.md`](doc
   com `BREVO_FROM_NAME="Amigo Secreto"` e `tracking-modes: cookie` (teste de URL sem `;jsessionid`).
 - **P12 — Caddy de borda (aplicada e verificada em 2026-11-16):** `mem_limit: 256m` no
   `/opt/edge/compose.yml`, `HostConfig.Memory=268435456`, config-hash idêntico e dry-run sem mudanças.
-- **P13 — rate limit dos endpoints de e-mail (implementado no código em 2026-11-16):**
+- **P13 — rate limit dos endpoints de e-mail (aplicado e validado em produção em 2026-11-16):**
   `POST /admin/{token}/links/email` (10/h) e `.../participants/{id}/email/resend` (20/h), com janela
-  de 1h e baldes separados; entra em produção com P15.
+  de 1h e baldes separados. No teste live, 10 POSTs retornaram 403 (CSRF) e o 11º retornou 429 com
+  `Retry-After: 3598`.
 - **P14 — SPF (aplicada em 2026-11-16):** TXT `v=spf1 include:spf.sendinblue.com -all` em
   `mail.barbosalabs.dev`, verificado no DNS público; DKIM/DMARC já estavam corretos.
-- **P15 — deploy da imagem nova:** a VPS roda `2b6e2d4`; o remoto já tem as correções P9–P12 e o
-  P13 está no working tree. Quando o CI publicar a imagem do commit novo,
-  `APP_TAG=<sha> bash scripts/deploy.sh`.
+- **P15 — deploy da imagem nova (aplicado em 2026-11-16):** a VPS foi de `2b6e2d4` para `6898819`,
+  com backup prévio, imagem ARM64 publicada no GHCR, `amigo-app`/`amigo-secreto-db-1` healthy e Flyway
+  V1–V3. Ver `docs/DEPLOY_CONCLUIDO.md` §15.
 - **Tokens em texto claro** e `Assignment` em claro no banco: risco aceito do modelo “link = credencial”.
 - **Tokens na URL**: histórico do navegador; `no-store`/`no-referrer` mitigam, não apagam.
-- **E-mail:** o envio está **ligado e validado ponta a ponta em 2026-11-16** (2 `SENT`, `attempts=1`, painel **Enviado**, zero erros, evento de teste apagado); o SPF foi publicado e o rate limit dos endpoints de e-mail ficou no código (entra com P15). Dedupe por endereço (melhor esforço sem verificação) ainda não foi implementado; telefone/WhatsApp API/SMS ficam fora.
+- **E-mail:** o envio está **ligado e validado ponta a ponta em 2026-11-16** (2 `SENT`, `attempts=1`, painel **Enviado**, zero erros, evento de teste apagado); o SPF foi publicado e o rate limit dos endpoints de e-mail está em produção (validado em 2026-11-16). Dedupe por endereço (melhor esforço sem verificação) ainda não foi implementado; telefone/WhatsApp API/SMS ficam fora.
 - **CSS próprio** em vez de Pico.css; Pico/HTMX continuam opcionais.
-- **Pendências operacionais do deploy**: cópia off-site do backup, restore completo, reboot, fluxo no navegador, monitoração externa, `DOCKER-USER` restritivo, `git fetch --unshallow`, limpeza de imagens de teste, P15 (deploy do commit novo) e CD opcional. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md) §9/§14.
+- **Pendências operacionais do deploy**: cópia off-site do backup, restore completo, reboot, fluxo no navegador, monitoração externa, `DOCKER-USER` restritivo, `git fetch --unshallow`, limpeza de imagens de teste e CD opcional. Ver [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md) §9/§14.

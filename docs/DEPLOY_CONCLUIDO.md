@@ -371,8 +371,8 @@ Não foram abertas portas `5432`, `8080` ou `2019`; egress rules não foram alte
 >
 > **Atualização de 2026-11-16:** a API key de produção foi validada e o e-mail foi **ligado e
 > validado ponta a ponta** (2 notificações `SENT`, painel **Enviado**, evento de teste apagado). Ver
-> §14. O SPF foi publicado e o rate limit dos endpoints de e-mail ficou no código; resta o deploy da
-> imagem do commit novo, que leva o rate limit.
+> §14. O SPF foi publicado e o rate limit dos endpoints de e-mail entrou em produção no deploy
+> `6898819` de 2026-11-16; ver §15.
 
 ### P9 — `db` sem limite de memória (divergência com o próprio `INFRA-VPS.md`)
 
@@ -431,11 +431,11 @@ intenção; o `--dry-run`/config-hash é o que confirma que o container em execu
 
 | Item | Por quê | Como fechar |
 | --- | --- | --- |
-| **E-mail real (Brevo)** | ✅ Validado em 2026-11-16: 2 `SENT`, `attempts=1`, painel **Enviado**, evento apagado; SPF aplicado e rate limit no código (P15 leva à VPS) | Ver §14 |
+| **E-mail real (Brevo)** | ✅ Validado em 2026-11-16: 2 `SENT`, `attempts=1`, painel **Enviado**, evento apagado; SPF aplicado e rate limit em produção desde `6898819` | Ver §14/§15 |
 | **Cópia off-site do backup** | Decisão do dono: "só na VPS por enquanto" | Backup no mesmo disco **não** protege contra perda da VPS. Restam 28 GB; `backups/` é `700` e a retenção é 14 dias |
 | **Restore completo testado** | Só foi validada a integridade do dump (`pg_restore --list`) | Rodar `scripts/restore-postgres.sh` num banco descartável (procedimento do `DEPLOY.md#restore`) e depois um ciclo real |
 | **Reboot da VPS** | Não foi reiniciada em produção nesta janela | Após o próximo reboot: conferir `docker ps` com os 3 containers `Up`, `iptables -S FORWARD` com `DOCKER-USER` no topo, `https://…` 200 e `systemctl list-timers` |
-| **Fluxo funcional no navegador** | Validação foi HTTP/segurança + suíte do projeto (159 testes) | Criar um evento real de teste e apagar depois (o banco está em 0/0) |
+| **Fluxo funcional no navegador** | Validação foi HTTP/segurança + suíte do projeto (164 testes) | Criar um evento real de teste e apagar depois |
 | **Monitoração/uptime externo** | Fora do escopo pedido | Um monitor HTTP (ex.: Uptime Kuma/healthchecks.io) apontando para `/` com alerta |
 | **`DOCKER-USER` com política restritiva** | Defesa em profundidade opcional do `DEPLOY.md#D6` | Criar regras de drop em `DOCKER-USER` liberando só 80/443 (lembrar que DNAT de porta publicada passa por `FORWARD`) |
 | **`git clone` raso** | Foi usado `--depth 1` | Se precisarem de histórico/rollback por commit: `cd /opt/amigo-secreto && git fetch --unshallow` |
@@ -444,8 +444,8 @@ intenção; o `--dry-run`/config-hash é o que confirma que o container em execu
 | **Atualização de imagens base** | `postgres:17-alpine`/`caddy:2-alpine` são flutuantes por tag | `docker compose pull` periódico + `docker image prune`; avaliar fixar digest |
 
 > O e-mail real foi validado em 2026-11-16 via API/UI (§14). Os scripts `scripts/check-brevo.sh` e
-> `scripts/smoke-email.sh` já foram adicionados ao repositório e podem ser usados na VPS após o
-> deploy do commit que os contém; o procedimento está em [`EMAIL-BREVO.md`](./EMAIL-BREVO.md) §8.1/8.2.
+> `scripts/smoke-email.sh` estão no repositório e no clone da VPS desde o deploy `6898819`; o
+> procedimento está em [`EMAIL-BREVO.md`](./EMAIL-BREVO.md) §8.1/8.2.
 
 ---
 
@@ -536,9 +536,8 @@ systemctl list-timers amigo-secreto-backup.timer                                
 
 - `docs/DEPLOY.md`, `docs/INFRA-VPS.md`, `docs/RATE-LIMITING.md`, `docs/EMAIL-BREVO.md` (repo).
 - Commit em produção no deploy de 2026-11-15: `2b6e2d4fc13d98eb67cfcd4bd91899957a028206` ("Merge pull
-  request #13 from michaelmelobarbosa/dev"). No teste de e-mail de 2026-11-16, a VPS ainda estava
-  nesse commit; o remoto já estava em `26bd7f4` (P9–P12) e depois avançou para `68e0476`, mas sem
-  imagem publicada para o commit novo.
+  request #13 from michaelmelobarbosa/dev"). Em 2026-11-16 a VPS foi atualizada para
+  `689881902958fbe8be9dd4bd9cd7d71472a60936` ("Merge pull request #18 from michaelmelobarbosa/dev").
 - CI: `.github/workflows/ci.yml` — job `image` publica `linux/arm64` com tag `:<sha>`; PR só testa.
 
 ---
@@ -564,18 +563,45 @@ Execução pelo Hermes, com autorização do dono.
 
 - **Scripts:** `scripts/check-brevo.sh` e `scripts/smoke-email.sh` **não estavam no remoto** no
   momento do teste; o Hermes fez o equivalente via API/UI. Os scripts foram adicionados ao
-  repositório depois e podem ser usados na VPS após o deploy do commit que os contém.
+  repositório depois e já estão no clone da VPS desde o deploy `6898819` (2026-11-16).
 - **SPF:** publicado em 2026-11-16 em `mail.barbosalabs.dev` (`v=spf1 include:spf.sendinblue.com
   -all`) e verificado no DNS público. O `brevo-code` continua no mesmo nome, como segundo TXT. DKIM
   (`brevo1`/`brevo2`) e DMARC (`p=none`, `rua@dmarc.brevo.com`) já estavam corretos.
 - **Rate limit:** `POST /admin/{token}/links/email` (10/h) e
   `POST /admin/{token}/participants/{id}/email/resend` (20/h) foram incluídos no `RateLimitFilter`
-  em 2026-11-16, com janela de 1h e baldes separados, para proteger a cota de 300/dia e a reputação
-  do domínio. Entram em produção com o deploy da imagem nova (P15).
-- **Imagem/deploy:** a VPS roda `2b6e2d4`; o remoto já tem P9–P12 e avançou para `68e0476`, mas ainda
-  não havia imagem publicada para o commit novo. Quando o CI publicar, o deploy é
-  `APP_TAG=<novo-sha> bash scripts/deploy.sh`.
+  com janela de 1h. Entraram em produção no deploy `6898819` e foram validados em 2026-11-16:
+  10 POSTs retornaram 403 (CSRF) e o 11º retornou **429** com `Retry-After: 3598`.
+- **Imagem/deploy:** a VPS foi atualizada de `2b6e2d4` para `6898819` em 2026-11-16; CI `success`,
+  manifesto ARM64 no GHCR `200`, `amigo-app` e `amigo-secreto-db-1` healthy. Ver §15.
 - **Cota:** 300 e-mails/dia no plano grátis. Um sorteio de 100 participantes usa 100; cada refazer
   usa mais 100 — dois refazeres no mesmo dia estouram a cota.
 - **Testes seguros:** `BREVO_SANDBOX=true` volta a ser o modo de testar sem entregar; o
   `check-brevo.sh` envia com `X-Sib-Sandbox: drop` nesse modo.
+
+---
+
+## 15. Deploy 2026-11-16 — imagem `6898819` e P13 em produção
+
+Execução pelo agente de código, via SSH `ubuntu@147.15.121.26`, com autorização do dono.
+
+| Passo | Resultado |
+| --- | --- |
+| `origin/main` | `689881902958fbe8be9dd4bd9cd7d71472a60936` ("Merge pull request #18 from .../dev") |
+| CI | workflow `CI` do SHA `6898819` com `conclusion=success` |
+| GHCR | manifesto ARM64 de `ghcr.io/michaelmelobarbosa/amigo-secreto:6898819` → HTTP `200` |
+| Backup | `backups/amigo-secreto-20261116-114413.dump` (20K), retenção de 14 dias aplicada |
+| Código na VPS | `git pull --ff-only` de `2b6e2d4` → `6898819` (fast-forward) |
+| Deploy | `APP_TAG=6898819… bash scripts/deploy.sh`; `db` e `app` recriados; `App saudável.` |
+| Containers | `amigo-app` e `amigo-secreto-db-1` `healthy`; `edge-caddy-1` intocado (12h) |
+| Portas | app `8080/tcp` e db `5432/tcp` internos; só `edge-caddy-1` publica 80/443 |
+| HTTPS | `GET /` → `200`; HSTS presente; `/actuator/health` → `404`; `robots.txt` com `Disallow: /` |
+| Sessão | HTML sem `;jsessionid` (P11 em produção) |
+| Flyway | V1 `init`, V2 `add participant email`, V3 `create notification`, todas `success=true` |
+| E-mail no container | `EMAIL_ENABLED=true`, `BREVO_SANDBOX=false`, `APP_BASE_URL=https://amigo-secreto.barbosalabs.dev` |
+| Rate limit de e-mail | `RATE_LIMIT_EMAIL_LINKS=10`, `RATE_LIMIT_EMAIL_RESEND=20`, `RATE_LIMIT_EMAIL_WINDOW=PT1H` |
+| P13 live | 11 POSTs em `/admin/adm_naoexiste/links/email`: `403` ×10 e **`429`** com `Retry-After: 3598` |
+| Logs | sem `ERROR`/`WARN` de Brevo/e-mail no arranque |
+
+P12 permanece aplicado e verificado no stack externo (`mem_limit: 256m`), sem alteração neste deploy.
+Pendências operacionais restantes: cópia off-site do backup, restore completo, reboot e fluxo no
+navegador.
