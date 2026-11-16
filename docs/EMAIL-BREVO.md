@@ -1,6 +1,6 @@
 # Fase 2 — e-mail com Brevo
 
-Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e **em produção, ligado e validado ponta a ponta em 2026-11-16**: 2 notificações `SENT` com `attempts=1`, painel exibindo **Enviado**, sem erro/retentativa, e evento de teste apagado. A chave de produção é restrita a envio (`GET /v3/account` → 403 é esperado). O SPF foi publicado em 2026-11-16. Os endpoints de e-mail têm rate limit no código (10/h e 20/h), que entra em produção com o próximo deploy; webhooks/double opt-in são opcionais.
+Guia operacional e de implementação para o envio do link individual por e-mail depois do sorteio. **Status:** backend implementado e **em produção, ligado e validado ponta a ponta em 2026-11-16**: 2 notificações `SENT` com `attempts=1`, painel exibindo **Enviado**, sem erro/retentativa, e evento de teste apagado. A chave de produção é restrita a envio (`GET /v3/account` → 403 é esperado). O SPF foi publicado em 2026-11-16. Os endpoints de e-mail têm rate limit (10/h e 20/h), validado em produção; webhooks/double opt-in são opcionais.
 
 ## 1. Decisão de arquitetura
 
@@ -439,8 +439,8 @@ Se aparecer “O envio de e-mail está desativado”, o `.env` ainda está com `
 aparecer “Links aceitos em modo sandbox”, `BREVO_SANDBOX=true` e nada foi entregue.
 
 > O teste de produção de 2026-11-16 foi feito via API/UI porque os scripts ainda **não estavam no
-> remoto** naquele momento. Eles já foram adicionados ao repositório e podem ser usados na VPS após o
-> deploy do commit que os contém.
+> remoto** naquele momento. Eles já foram adicionados ao repositório e estão no clone da VPS desde o
+> deploy `6898819`.
 
 **Fluxo completo do sorteio:** crie um evento, adicione um participante com e-mail, sorteie e confira
 o status **Enviado** no painel e o **Transactional Logs** do Brevo. O worker roda a cada 30s; o painel
@@ -450,8 +450,8 @@ provedor. Esse é o teste que cobre outbox + worker, além do adaptador.
 > **Cota e abuso:** o plano grátis tem 300 e-mails/dia. Um sorteio de 100 participantes usa 100;
 > cada refazer usa mais 100 — dois refazeres no mesmo dia estouram a cota. Os endpoints
 > `POST /admin/{token}/links/email` (10/h) e `POST /admin/{token}/participants/{id}/email/resend`
-> (20/h) têm rate limit no código, que entra em produção com P15; a cota diária em si ainda não tem
-> um teto separado.
+> (20/h) têm rate limit, validado em produção em 2026-11-16; a cota diária em si ainda não tem um
+> teto separado.
 
 ## 9. Checklist de implementação
 
@@ -473,7 +473,7 @@ provedor. Esse é o teste que cobre outbox + worker, além do adaptador.
 - [x] Teste ponta a ponta com 2 participantes: `SENT`, `attempts=1`, painel **Enviado**, zero erros; evento de teste apagado.
 - [ ] Confirmar se a chave usada é separada da de dev (recomendado).
 - [x] SPF de `mail.barbosalabs.dev` publicado em 2026-11-16 (`v=spf1 include:spf.sendinblue.com -all`) e verificado no DNS público.
-- [x] Rate limit em `POST /admin/{token}/links/email` (10/h) e `.../participants/{id}/email/resend` (20/h) implementado no código em 2026-11-16; entra em produção com P15.
+- [x] Rate limit em `POST /admin/{token}/links/email` (10/h) e `.../participants/{id}/email/resend` (20/h) implementado e validado em produção em 2026-11-16.
 - [ ] Opcional: webhooks de delivered/bounce e double opt-in.
 
 ## 10. Decisões que ainda podem ser tomadas
