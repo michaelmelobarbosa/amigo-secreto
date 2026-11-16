@@ -31,8 +31,8 @@ Aplicação web para organizar amigo secreto, sem login, com acesso por links co
 | Wishlist | Texto livre por participante, no MVP, editável antes e depois do sorteio |
 | Banco | PostgreSQL em dev e produção (Docker Compose). H2 apenas nos testes |
 | Migrações | Flyway desde a V1; `spring.jpa.hibernate.ddl-auto=validate`. Não usar `update` no schema real (seção 8) |
-| Deploy | Dockerfile multi-stage + Docker Compose (app + Postgres) na VPS, com Caddy em stack de borda compartilhado |
-| Domínio e HTTPS | Ficam para depois do MVP, mas são pré-requisito da fase 2 de e-mail e de qualquer uso real na internet |
+| Deploy | Dockerfile multi-stage + Docker Compose (app + Postgres) na VPS, com Caddy em stack de borda compartilhado. **Em produção desde 2026-11-15**; registro em [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md) |
+| Domínio e HTTPS | **Em produção desde 2026-11-15**: app em `amigo-secreto.barbosalabs.dev` e envio em `mail.barbosalabs.dev` (Brevo), com TLS Let's Encrypt |
 | Organização do código | Pacotes por funcionalidade |
 
 ### Por que Spring Boot, mesmo sendo "overkill"
@@ -237,14 +237,14 @@ Use POST para remoções (formulários HTML não têm DELETE) e proteja contra C
 - Rotas `/p/**`, `/join/**` e `/admin/**` com `Cache-Control: no-store` e `Referrer-Policy: no-referrer`, para o token não vazar para terceiros. Os headers de segurança também cobrem `/` e `/events` (o redirect de criação carrega o token do painel).
 - `robots.txt` bloqueia indexação; CSP restritiva (`script-src 'self'`, `frame-ancestors 'none'`); `X-Content-Type-Options`, `X-Frame-Options` e `X-Robots-Tag` nas rotas sensíveis.
 - Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` por padrão. O perfil `dev` desativa `Secure` para rodar em HTTP local; produção exige HTTPS.
-- O convite é público: limite de tamanho nos campos, teto de participantes por evento e rate limiting por IP em `POST /events` (5/10 min), `POST /join/{inviteCode}` (30/10 min), `draw`/`redraw` (10/h) e wishlist (30/10 min), em memória, com `429` + `Retry-After`. Ver [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
+- O convite é público: limite de tamanho nos campos, teto de participantes por evento e rate limiting por IP em `POST /events` (5/10 min), `POST /join/{inviteCode}` (30/10 min), `draw`/`redraw` (10/h) e wishlist (30/10 min), em memória, com `429` + `Retry-After`. **Validado em produção em 2026-11-15**, inclusive contra `X-Forwarded-For` forjado. Ver [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - Validação de entrada com Bean Validation e escape automático do Thymeleaf contra XSS. Proteção CSRF com token de sessão próprio em todos os POSTs.
 - Apagar evento exige CSRF e confirmação explícita; a operação é irreversível.
 - Segredos (senha do banco) em variáveis de ambiente, fora do repositório.
-- Como os tokens viajam na URL, não exponha o app em HTTP puro na internet com dados reais. Enquanto não houver domínio e HTTPS, use em rede local ou com um túnel.
+- Como os tokens viajam na URL, não exponha o app em HTTP puro na internet com dados reais. Em produção há HTTPS desde 2026-11-15; em rede local, use o perfil `dev` ou um túnel.
 - Disciplina do organizador: o banco guarda os `Assignment` em claro. Quem tem acesso direto ao banco pode ver o resultado. Para uso em família e trabalho isso é aceitável, e vale registrar no README.
 - O link do painel é a credencial do organizador. O download e o e-mail dos links carregam aviso explícito para não compartilhar; o endereço digitado para o envio avulso não é persistido.
-- E-mail, quando entrar na fase 2, é apenas canal de entrega: não vira login, não substitui o token e não é exibido em página pública. Endereços são dados pessoais e são apagados junto com o evento.
+- O e-mail é apenas canal de entrega: não vira login, não substitui o token e não é exibido em página pública. Endereços são dados pessoais e são apagados junto com o evento. Em produção ele está desligado até a API key de produção.
 
 ## 8. Arquitetura e estrutura do projeto
 
@@ -335,23 +335,27 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 
 ## 10. Deploy na VPS
 
+> **Executado em 2026-11-15:** `https://amigo-secreto.barbosalabs.dev` no ar, TLS Let's Encrypt,
+> Flyway V1–V3 e backup diário por systemd timer. Registro completo em
+> [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
+
 1. `Dockerfile` multi-stage: build com Maven/JDK, runtime com JRE enxuto, usuário não root.
 2. `docker-compose.yml` de produção: serviços `app` e `db` (Postgres com volume persistente). O **Caddy** vive em um stack de borda separado, compartilhado com outras aplicações, e publica 80/443 com HTTPS automático (Let's Encrypt); a app não publica portas e entra na rede externa `edge` como `amigo-app`.
 3. Configuração por variáveis de ambiente (`SPRING_DATASOURCE_URL`, usuário, senha, `APP_BASE_URL`) em arquivo `.env` fora do Git.
-4. Backup periódico do volume do Postgres (`pg_dump` agendado).
+4. Backup periódico do volume do Postgres (`pg_dump` agendado). Na VPS atual, que **não tem `cron`**, o agendamento é um **systemd timer** (`amigo-secreto-backup.timer`, 03:15, retenção 14 dias).
 5. Endpoint de saúde (`/actuator/health`), se adicionar o Actuator, usado pelo healthcheck do Compose.
-6. Domínio ou subdomínio apontando para a VPS (a definir depois do MVP; enquanto não houver HTTPS, não use com dados reais na internet pública). Para a fase 2 de e-mail, o mesmo domínio raiz serve: app em `app.exemplo.com` e e-mail em `mail.exemplo.com`, com SPF/DKIM/DMARC.
+6. Domínio e HTTPS **em produção desde 2026-11-15**: app em `amigo-secreto.barbosalabs.dev` e envio em `mail.barbosalabs.dev`, com DKIM/DMARC. A VPS não tem IPv6 global, então só há registro A.
 7. Atrás do proxy, configurar `server.forward-headers-strategy=framework` para que os links absolutos saiam com o host e o esquema (`https`) corretos.
 
 ## 11. Fora do MVP (registrar em `docs/IDEAS.md`)
 
-- E-mail transacional (fase 2): link individual após o sorteio/refazer, e-mail opcional, Brevo, domínio/SPF/DKIM/DMARC, retentativas e status de entrega. Detalhes na seção 15.
+- E-mail transacional (fase 2): link individual após o sorteio/refazer, e-mail opcional, Brevo, domínio/SPF/DKIM/DMARC, retentativas e status de entrega. **Implementado**; em produção está desligado até a API key. Detalhes na seção 15.
 - Telefone/WhatsApp Cloud API/SMS/Telegram como canal automatizado. O MVP mantém o `wa.me` manual; WhatsApp API é paga para mensagens utility iniciadas pelo negócio e SMS é pago.
 - Recuperação de link por e-mail e double opt-in (avaliar depois da fase 2).
-- Rate limiting por IP em `/events`, `/join` e sorteio, **implementado em 2026-11-15** (filtro em memória; validação atrás do Caddy fica para o deploy). Limite diário, Redis e WAF continuam fora. Plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
+- Rate limiting por IP em `/events`, `/join` e sorteio, **implementado e validado em produção em 2026-11-15**. Limite diário, Redis e WAF continuam fora. Plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - Permutação com reciprocidade permitida, como opção do evento.
 - Expiração automática de eventos antigos (limpeza de dados).
-- Domínio próprio e HTTPS (pré-requisito da fase 2 de e-mail e de uso real na internet).
+- Domínio próprio e HTTPS: **implementado em 2026-11-15** (`amigo-secreto.barbosalabs.dev`).
 - Internacionalização.
 
 ## 12. Plano de implementação
@@ -367,15 +371,14 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 9. **Segurança:** cabeçalhos, 404 para tokens inválidos, testes de privacidade.
 10. **Deploy:** Dockerfile, Compose de produção, proxy, backup.
 11. **Portfólio:** README (o que é, como rodar, decisões de arquitetura, prints) e `docs/IDEAS.md`.
-12. **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, templates e testes de entrega (seção 15).
+12. **Fase 2 — e-mail:** coluna `email`, tabela `notification`, listener de `DrawCompletedEvent`, Brevo, conteúdo HTML/texto via `EmailContentBuilder` e testes de entrega (seção 15). **Implementado; produção desligada até a API key.**
 
 ## 13. Pontos em aberto
 
-Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados nas seções acima.
-
-| Tema | Situação |
-| --- | --- |
-| Domínio e HTTPS | Definido: app em `amigo-secreto.barbosalabs.dev` e envio em `mail.barbosalabs.dev` (subdomínio autenticado no Brevo). Resta aplicar o DNS e o `.env` na VPS |
+Nenhum ponto de decisão em aberto. O domínio/HTTPS foi aplicado e o deploy está em produção desde
+2026-11-15. As pendências restantes são operacionais ou de código (P9–P12, e-mail real, cópia
+off-site, restore completo, reboot e fluxo no navegador) e estão em
+[`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md) §8/§9 e em [`docs/IDEAS.md`](docs/IDEAS.md).
 
 ## 14. Histórico de decisões
 
@@ -387,14 +390,15 @@ Resta um ponto em aberto. Todos os demais foram decididos e estão incorporados 
 - 2026-11-14: fase 2 implementada com Brevo, outbox `notification`, worker com retry/idempotência, e-mail opcional no join e na adição manual, status/reenvio no painel e envio real validado. Dedupe por e-mail continua fora desta versão.
 - 2026-11-14: rate limiting por IP decidido para **depois do deploy**, com filtro em memória, janela fixa, sem dependência nova e limites generosos; plano em [`docs/RATE-LIMITING.md`](docs/RATE-LIMITING.md).
 - 2026-11-14: mitigação da perda do link do painel: cartão de links com cópia, download em TXT e envio por e-mail sob demanda, mais aviso ao sair sem guardar. Não é login nem recuperação automática; a conta de organizador continua como fase futura.
-- 2026-11-15: rate limiting em memória implementado: `OncePerRequestFilter` por IP/categoria, janela fixa, mapa LRU, `429` + `Retry-After` e janela própria de 1 hora para sorteio. Falta validar o IP real atrás do Caddy no deploy.
+- 2026-11-15: rate limiting em memória implementado: `OncePerRequestFilter` por IP/categoria, janela fixa, mapa LRU, `429` + `Retry-After` e janela própria de 1 hora para sorteio. Validado em produção no mesmo dia, inclusive contra `X-Forwarded-For` forjado.
 - 2026-11-15: deploy endurecido: Postgres de dev em loopback, `mem_limit`/`cpus`, rotação de log, build ARM64 sem QEMU, imagem imutável no GHCR e Caddy desacoplado para um stack de borda externo (rede `edge`).
+- 2026-11-15: **deploy real concluído** em `https://amigo-secreto.barbosalabs.dev`: DNS A, Security List Oracle, stack `edge` com `edge-caddy-1`, imagem pública `2b6e2d4…`, Flyway V1–V3 e backup diário por **systemd timer** (a VPS não tem `cron`). Divergências e pendências (P9–P12) em [`docs/DEPLOY_CONCLUIDO.md`](docs/DEPLOY_CONCLUIDO.md).
 
 ## 15. Fase 2 — e-mail (implementado)
 
 Guia operacional detalhado: [`docs/EMAIL-BREVO.md`](docs/EMAIL-BREVO.md).
 
-A fase 2 está implementada: o e-mail é um canal **opcional** de entrega do link individual, nunca credencial e nunca obrigatório. O caminho manual (`wa.me` e copiar link) continua funcionando. O envio real depende de `EMAIL_ENABLED=true`, `BREVO_SANDBOX=false` e da API key de produção no ambiente.
+A fase 2 está implementada: o e-mail é um canal **opcional** de entrega do link individual, nunca credencial e nunca obrigatório. O caminho manual (`wa.me` e copiar link) continua funcionando. O envio real depende de `EMAIL_ENABLED=true`, `BREVO_SANDBOX=false` e da API key de produção no ambiente. **No deploy de 2026-11-15, o e-mail ficou desligado** (`EMAIL_ENABLED=false`, sem API key); o IP de saída da VPS para allowlist é `<VPS_PUBLIC_IP>`.
 
 ### O que ficou preparado antes da fase 2
 

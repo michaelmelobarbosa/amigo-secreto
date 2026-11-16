@@ -1,8 +1,10 @@
 # Rate limiting — implementação e operação
 
-> **Status:** **implementado em 2026-11-15**. O filtro, a configuração, a resposta 429 e os testes
-> estão no código. Falta apenas validar no deploy real que o Caddy entrega o IP do cliente e que
-> `X-Forwarded-For` forjado não engana o filtro; só depois disso divulgue o link publicamente.
+> **Status:** **implementado e validado em produção em 2026-11-15**. O filtro, a configuração, a
+> resposta 429 e os testes estão no código. A validação real confirmou os limites e o IP do cliente
+> atrás do Caddy de borda (ver [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §4 F4): os cinco
+> primeiros `POST /events` passaram, o sexto retornou `429` com `Retry-After: 600`, e
+> `X-Forwarded-For` forjado (`9.9.9.9`, `8.8.4.4`) não criou bucket novo.
 
 ## 1. Por que existe
 
@@ -153,11 +155,12 @@ debug temporário, sem IP) que o balde é o do cliente real.
 
 ## 7. Checklist de execução
 
-- [ ] Confirmar que o deploy real está estável e que o app não publica porta no host.
-- [ ] Confirmar que o Caddy entrega o IP real e que `X-Forwarded-For` forjado não engana o filtro.
+- [x] Confirmar que o deploy real está estável e que o app não publica porta no host.
+- [x] Confirmar que o Caddy entrega o IP real e que `X-Forwarded-For` forjado não engana o filtro.
 - [x] Implementar propriedades, filtro, resposta 429 e testes.
 - [x] Rodar a suíte completa.
-- [ ] Subir com limites padrão e testar de duas redes diferentes.
+- [ ] Subir com limites padrão e testar de duas redes diferentes (validado de fora + XFF forjado;
+      falta uma segunda rede).
 - [ ] Verificar que criar 1 evento e entrar com 10 pessoas no mesmo Wi-Fi continua funcionando.
 - [ ] Só então divulgar o link publicamente.
 - [ ] Se aparecer abuso real, considerar limite diário, Redis ou WAF — não antecipar.

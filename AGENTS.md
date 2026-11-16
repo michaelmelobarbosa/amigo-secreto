@@ -6,10 +6,11 @@ Aplicação web para organizar amigo secreto sem login: acesso por links com tok
 
 - [Especificação](<./Amigo Secreto — Especificação do Projeto.md>) — fonte da verdade de escopo, domínio, arquitetura e segurança. Se o código precisar divergir, atualize a spec na mesma entrega.
 - [implementation.md](./implementation.md) — plano por fases, estrutura de pacotes e estado atual. Em caso de divergência com a spec, a spec vence.
+- [DEPLOY_CONCLUIDO.md](./docs/DEPLOY_CONCLUIDO.md) — registro da execução real do deploy (2026-11-15), evidências e pendências. Onde divergir de `DEPLOY.md`/`INFRA-VPS.md`, vale este registro.
 
 ## Stack
 
-Java 25 · Spring Boot 4.1.2 (webmvc, data-jpa, validation, thymeleaf) · Flyway · PostgreSQL em dev/prod · H2 só em testes · Pico.css · sem SPA, sem Spring Security, sem Lombok.
+Java 25 · Spring Boot 4.1.2 (webmvc, data-jpa, validation, thymeleaf) · Flyway · PostgreSQL em dev/prod · H2 só em testes · CSS próprio (Pico.css opcional) · sem SPA, sem Spring Security, sem Lombok.
 
 ## Comandos
 
@@ -40,7 +41,7 @@ Pacotes por funcionalidade em `br.com.michael.amigosecreto`: `event`, `participa
 
 ## O que já existe
 
-`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail, o rate limiting e as pendências P1–P6 de deploy estão implementados; o Caddy é um stack de borda externo. Falta configurar DNS, rede `edge`, stack de borda e imagem no GHCR na VPS, validar o IP real atrás do Caddy e executar o primeiro deploy.
+`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail, o rate limiting e o deploy estão **em produção desde 2026-11-15** (`https://amigo-secreto.barbosalabs.dev`); o Caddy é um stack de borda externo e o registro está em `docs/DEPLOY_CONCLUIDO.md`. Pendências abertas: P9 (`db` sem `mem_limit`), P10 (aspas no `.env.prod.example`), P11 (`jsessionid`), P12 (Caddy `mem_limit`), e-mail real, cópia off-site do backup, restore completo, reboot e fluxo no navegador.
 
 ## Agentes do projeto
 
