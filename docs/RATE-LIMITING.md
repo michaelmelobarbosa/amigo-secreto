@@ -151,7 +151,7 @@ debug temporário, sem IP) que o balde é o do cliente real.
 - IPv4, IPv6 e IPv6 mapeado (`::ffff:1.2.3.4`) são normalizados corretamente.
 - Mapa não cresce sem limite (teste unitário com `maxKeys` pequeno).
 - 429 não contém token, IP nem detalhe interno.
-- Suíte existente continua verde (160 testes).
+- Suíte existente continua verde (162 testes).
 
 ## 7. Checklist de execução
 
@@ -177,3 +177,18 @@ debug temporário, sem IP) que o balde é o do cliente real.
   cota diária de notificações.
 - O disco continua crescendo com eventos legítimos antigos; a limpeza/expiração de eventos é uma
   pendência separada em [`IDEAS.md`](IDEAS.md).
+
+## 9. Pendente: endpoints de e-mail (P13)
+
+Com o e-mail ligado em produção em 2026-11-16, dois endpoints passaram a consumir cota e reputação
+do Brevo sem limite por IP:
+
+| Rota | Categoria sugerida | Limite inicial |
+| --- | --- | --- |
+| `POST /admin/{token}/links/email` | `email-links` | 10 por hora |
+| `POST /admin/{token}/participants/{id}/email/resend` | `email-resend` | 20 por hora |
+
+Motivo: o plano grátis tem **300 e-mails/dia**; um evento de 100 participantes com um refazer já usa
+200. Sem limite, um organizador (ou alguém com o link do painel) pode esgotar a cota e queimar a
+reputação do domínio. A implementação reutiliza o `RateLimitFilter` e o `app.rate-limit`, com janela
+própria se necessário. **Ainda não implementado**; é a próxima prioridade de segurança.
