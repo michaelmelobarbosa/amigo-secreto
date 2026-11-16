@@ -5,8 +5,8 @@
 > atrás do Caddy de borda (ver [`DEPLOY_CONCLUIDO.md`](./DEPLOY_CONCLUIDO.md) §4 F4): os cinco
 > primeiros `POST /events` passaram, o sexto retornou `429` com `Retry-After: 600`, e
 > `X-Forwarded-For` forjado (`9.9.9.9`, `8.8.4.4`) não criou bucket novo. Em 2026-11-16, os
-> endpoints `links/email` (10/h) e `email/resend` (20/h) também foram incluídos no código, com janela
-> própria; eles entram em produção com o próximo deploy (P15).
+> endpoints `links/email` (10/h) e `email/resend` (20/h) também foram incluídos e validados em
+> produção: 10 POSTs retornaram 403 (CSRF) e o 11º retornou **429** com `Retry-After: 3598`.
 
 ## 1. Por que existe
 
@@ -169,6 +169,7 @@ debug temporário, sem IP) que o balde é o do cliente real.
 - [x] Confirmar que o Caddy entrega o IP real e que `X-Forwarded-For` forjado não engana o filtro.
 - [x] Implementar propriedades, filtro, resposta 429 e testes.
 - [x] Incluir `links/email` (10/h) e `email/resend` (20/h) em 2026-11-16, com testes de janela e baldes.
+- [x] Validar o rate limit de e-mail em produção em 2026-11-16 (10×403 + 11º 429 com `Retry-After`).
 - [x] Rodar a suíte completa.
 - [ ] Subir com limites padrão e testar de duas redes diferentes (validado de fora + XFF forjado;
       falta uma segunda rede).
@@ -189,7 +190,7 @@ debug temporário, sem IP) que o balde é o do cliente real.
 - O disco continua crescendo com eventos legítimos antigos; a limpeza/expiração de eventos é uma
   pendência separada em [`IDEAS.md`](IDEAS.md).
 
-## 9. Endpoints de e-mail (P13 — implementado)
+## 9. Endpoints de e-mail (P13 — em produção)
 
 Com o e-mail ligado em produção em 2026-11-16, dois endpoints passaram a consumir cota e reputação
 do Brevo. Eles foram incluídos no rate limit no mesmo dia:
@@ -202,4 +203,6 @@ do Brevo. Eles foram incluídos no rate limit no mesmo dia:
 Motivo: o plano grátis tem **300 e-mails/dia**; um evento de 100 participantes com um refazer já usa
 200. Sem limite, um organizador (ou alguém com o link do painel) pode esgotar a cota e queimar a
 reputação do domínio. A implementação usa o `RateLimitFilter` e o `app.rate-limit`, com
-`email-window` própria (`PT1H`) e baldes separados. Coberto por `RateLimitFilterTest`.
+`email-window` própria (`PT1H`) e baldes separados. Coberto por `RateLimitFilterTest` e validado em
+produção em 2026-11-16: 10 POSTs em `/admin/adm_naoexiste/links/email` retornaram 403 (CSRF) e o 11º
+retornou `429` com `Retry-After: 3598`.
