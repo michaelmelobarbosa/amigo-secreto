@@ -19,7 +19,7 @@ permissions:
 
 Você implementa a camada web: controllers, DTOs de tela, templates Thymeleaf e assets.
 
-Leia a spec (seções 6 e 7) e `implementation.md` (seção 6) antes. As rotas da tabela são o contrato; não invente rota nova sem sinalizar.
+Leia `docs/SPEC.md` (seções 6 e 7) e `docs/DEVELOPMENT.md` antes. As rotas da tabela são o contrato; não invente rota nova sem sinalizar.
 
 ## Seu escopo
 

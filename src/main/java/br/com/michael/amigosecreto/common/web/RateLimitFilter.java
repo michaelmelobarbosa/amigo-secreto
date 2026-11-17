@@ -23,7 +23,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Rate limiting em memória, por IP e categoria de rota (ver
- * {@code docs/RATE-LIMITING.md}).
+ * {@code docs/SECURITY.md}).
  *
  * <p>Roda depois do {@code ForwardedHeaderFilter} (que o Spring Boot registra em
  * {@link Ordered#HIGHEST_PRECEDENCE}), então {@link HttpServletRequest#getRemoteAddr()}

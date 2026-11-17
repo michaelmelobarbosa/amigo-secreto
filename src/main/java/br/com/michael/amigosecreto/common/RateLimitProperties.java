@@ -4,7 +4,7 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuração do rate limiting em memória (ver {@code docs/RATE-LIMITING.md}).
+ * Configuração do rate limiting em memória (ver {@code docs/SECURITY.md}).
  *
  * <p>Os limites são generosos de propósito: uma família atrás do mesmo IP
  * precisa criar um evento e várias pessoas entrarem em sequência. Categorias
