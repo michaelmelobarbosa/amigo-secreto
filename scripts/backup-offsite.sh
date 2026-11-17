@@ -4,6 +4,7 @@
 # Uso:
 #   bash scripts/backup-offsite.sh
 #   OFFSITE_REMOTE=offsite-crypt:backups OFFSITE_RETENTION_DAYS=30 bash scripts/backup-offsite.sh
+#   OFFSITE_SKIP_BACKUP=1 bash scripts/backup-offsite.sh   # usa o dump mais recente
 #
 # Requisitos:
 #   - scripts/backup-postgres.sh funcionando;
@@ -24,7 +25,9 @@ fi
 REMOTE="${OFFSITE_REMOTE:-offsite-crypt:backups}"
 RETENTION_DAYS="${OFFSITE_RETENTION_DAYS:-30}"
 
-bash scripts/backup-postgres.sh
+if [ "${OFFSITE_SKIP_BACKUP:-0}" != "1" ]; then
+    bash scripts/backup-postgres.sh
+fi
 DUMP="$(ls -t backups/*.dump | head -n1)"
 NAME="$(basename "$DUMP")"
 
