@@ -38,3 +38,6 @@ build/
 !.env.example
 !.env.prod.example
 docker-compose.override.yml
+
+### Documentação local (dados reais de operação) ###
+local/

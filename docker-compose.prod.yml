@@ -1,7 +1,7 @@
 name: amigo-secreto
 
 # Produção: dois containers neste projeto (app + Postgres).
-# O Caddy é um stack de borda separado (ver docs/INFRA-VPS.md): ele publica
+# O Caddy é um stack de borda separado (ver docs/DEPLOYMENT.md): ele publica
 # 80/443, roteia por hostname e alcança esta app por amigo-app:8080 na rede
 # externa "edge". Nenhum container deste arquivo publica porta no host.
 

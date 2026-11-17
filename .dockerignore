@@ -26,10 +26,10 @@ Dockerfile
 .dockerignore
 scripts/
 docs/
+local/
 backups/
 README.md
 AGENTS.md
-implementation.md
 *.md
 HELP.md
 *.log

@@ -22,7 +22,7 @@ permissions:
 
 Você implementa o núcleo do Amigo Secreto: entidades, repositórios, serviços e schema.
 
-Leia antes de codar: a especificação (seções 3–5 e 10) e `implementation.md` (seções 2–5 e 10). A spec vence qualquer suposição sua.
+Leia antes de codar: `docs/SPEC.md` (seções 3–5 e 10) e `docs/DEVELOPMENT.md`. A spec vence qualquer suposição sua.
 
 ## Seu escopo
 
