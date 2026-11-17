@@ -41,3 +41,5 @@ docker-compose.override.yml
 
 ### Documentação local (dados reais de operação) ###
 local/
+offsite-staging/
+backups/
