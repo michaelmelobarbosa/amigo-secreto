@@ -267,6 +267,10 @@ OFFSITE_REMOTE=meu-crypt:backups bash scripts/backup-offsite.sh
 - `OFFSITE_RETENTION_DAYS` (padrão 30) remove cópias antigas no remote.
 - Guarde a senha do remote `crypt` fora da VPS; sem ela o backup é irrecuperável.
 
+Para manter o staging atualizado sem gerar um dump extra, um timer diário pode chamar
+`OFFSITE_SKIP_BACKUP=1 bash scripts/backup-offsite.sh` depois do backup local. O download para outra
+máquina continua sendo o passo que tira a cópia da VPS.
+
 Se o destino for manual, copie o diretório de staging criptografado para outra máquina e valide a
 decriptação com a mesma chave. Uma cópia baixada manualmente só é off-site depois de sair da VPS.
 
