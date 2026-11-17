@@ -137,14 +137,23 @@
     </section>
 
     <section class="card">
-        <h2>Participantes</h2>
+        <div class="section-heading">
+            <h2>Participantes</h2>
+            <button class="button secondary participants-toggle" type="button"
+                    data-participants-toggle aria-controls="participants-list" aria-expanded="true"
+                    th:if="${!event.participants.isEmpty()}">
+                <span class="when-collapsed" th:text="|Mostrar lista (${event.participants.size()})|">Mostrar lista (1)</span>
+                <span class="when-expanded" hidden th:text="|Ocultar lista (${event.participants.size()})|">Ocultar lista (1)</span>
+            </button>
+        </div>
 
         <div class="alert alert-warning" role="alert" th:if="${event.hasDuplicateNames}">
             Há nomes repetidos. Confira com o organizador para não sortear a pessoa errada.
         </div>
 
-        <div class="table-wrap" th:if="${!event.participants.isEmpty()}">
-            <table>
+        <div class="table-wrap participants-list" id="participants-list"
+             th:if="${!event.participants.isEmpty()}">
+            <table class="participants-table">
                 <thead>
                 <tr>
                     <th scope="col">Nome</th>
@@ -152,27 +161,22 @@
                     <th scope="col">Status do e-mail</th>
                     <th scope="col">Link individual</th>
                     <th scope="col">Já visualizou</th>
-                    <th scope="col" th:if="${event.canEdit}">Ação</th>
+                    <th scope="col">Ações</th>
                 </tr>
                 </thead>
                 <tbody>
                 <tr th:each="row : ${event.participants}">
-                    <td>
+                    <td class="participant-name">
                         <span th:text="${row.name}">Ana</span>
                         <span class="badge" th:if="${row.organizer}">Organizador</span>
                         <span class="badge badge-warning" th:if="${row.duplicateName}">Nome repetido</span>
                     </td>
-                    <td class="email-cell" th:text="${row.emailStatusLabel == 'Sem e-mail' ? 'Sem e-mail' : row.email}">pessoa@example.com</td>
-                    <td>
+                    <td class="email-cell" data-label="E-mail"
+                        th:text="${row.emailStatusLabel == 'Sem e-mail' ? 'Sem e-mail' : row.email}">pessoa@example.com</td>
+                    <td data-label="Status do e-mail">
                         <span th:text="${row.emailStatusLabel}">Aguardando sorteio</span>
-                        <form class="resend-email-form" th:if="${row.canResendEmail}"
-                              th:action="@{/admin/{token}/participants/{id}/email/resend(token=${adminToken},id=${row.id})}"
-                              method="post" data-confirm="Reenviar o e-mail para este participante?">
-                            <div th:replace="~{fragments/common :: csrf}"></div>
-                            <button class="button secondary" type="submit">Reenviar</button>
-                        </form>
                     </td>
-                    <td>
+                    <td data-label="Link individual">
                         <div class="row-actions">
                             <button class="button secondary icon-button" type="button"
                                     th:attr="data-copy=${row.participantUrl},aria-label=${'Copiar link de ' + row.name},title=${'Copiar link de ' + row.name}">
@@ -186,14 +190,25 @@
                             </a>
                         </div>
                     </td>
-                    <td th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</td>
-                    <td th:if="${event.canEdit}">
-                        <form th:if="${row.canRemove}" th:action="@{/admin/{token}/participants/{id}/delete(token=${adminToken},id=${row.id})}" method="post"
-                              th:attr="data-confirm=|Remover ${row.name}?|">
-                            <div th:replace="~{fragments/common :: csrf}"></div>
-                            <button class="button danger" type="submit">Remover</button>
-                        </form>
-                        <span class="muted" th:if="${row.organizer}">Não pode ser removido</span>
+                    <td data-label="Já visualizou" th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</td>
+                    <td data-label="Ações">
+                        <div class="row-actions">
+                            <form class="resend-email-form" th:if="${row.canResendEmail}"
+                                  th:action="@{/admin/{token}/participants/{id}/email/resend(token=${adminToken},id=${row.id})}"
+                                  method="post" data-confirm="Reenviar o e-mail para este participante?">
+                                <div th:replace="~{fragments/common :: csrf}"></div>
+                                <button class="button secondary" type="submit">Reenviar</button>
+                            </form>
+                            <form th:if="${row.canRemove}"
+                                  th:action="@{/admin/{token}/participants/{id}/delete(token=${adminToken},id=${row.id})}"
+                                  method="post" th:attr="data-confirm=|Remover ${row.name}?|">
+                                <div th:replace="~{fragments/common :: csrf}"></div>
+                                <button class="button danger" type="submit">Remover</button>
+                            </form>
+                            <span class="muted" th:if="${event.canEdit and row.organizer}">Não pode ser removido</span>
+                            <span class="muted"
+                                  th:if="${!row.canResendEmail and !row.canRemove and !(event.canEdit and row.organizer)}">—</span>
+                        </div>
                     </td>
                 </tr>
                 </tbody>

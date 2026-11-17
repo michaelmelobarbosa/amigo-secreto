@@ -3,14 +3,21 @@
 <head th:fragment="head(pageTitle)">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#050914">
     <title th:text="${pageTitle} + ' · Amigo Secreto'">Amigo Secreto</title>
+    <link rel="icon" type="image/png" sizes="32x32" th:href="@{/images/gift-32.png}">
+    <link rel="icon" type="image/svg+xml" th:href="@{/images/gift.svg}">
+    <link rel="apple-touch-icon" sizes="180x180" th:href="@{/images/gift-180.png}">
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
 <header class="site-header" th:fragment="nav(eventName)">
     <div class="container header-content">
-        <a class="brand" th:href="@{/}" data-nav-home>Amigo Secreto</a>
+        <a class="brand" th:href="@{/}" data-nav-home>
+            <img class="brand-icon" th:src="@{/images/gift.svg}" alt="" width="32" height="32">
+            <span>Amigo Secreto</span>
+        </a>
         <span class="header-event"
               th:if="${eventName != null and !#strings.isEmpty(eventName)}"
               th:text="${eventName}" th:attr="title=${eventName}">Evento</span>
