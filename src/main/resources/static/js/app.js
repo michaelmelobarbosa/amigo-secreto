@@ -1,3 +1,5 @@
+document.documentElement.classList.add('js-enabled');
+
 document.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-copy]');
     if (!button) {
@@ -66,6 +68,70 @@ document.addEventListener('click', async (event) => {
         window.prompt('Copie o link manualmente:', value);
     }
 });
+
+document.querySelectorAll('[data-date-trigger-for]').forEach((trigger) => {
+    const target = document.getElementById(trigger.getAttribute('data-date-trigger-for'));
+    if (!target) {
+        return;
+    }
+
+    const syncFromTarget = () => {
+        trigger.value = target.value;
+    };
+
+    trigger.addEventListener('click', () => {
+        if (typeof trigger.showPicker === 'function') {
+            try {
+                trigger.showPicker();
+            } catch (error) {
+                // O navegador pode já ter aberto o picker pelo clique nativo.
+            }
+        }
+    });
+
+    trigger.addEventListener('change', () => {
+        target.value = trigger.value;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    target.addEventListener('input', syncFromTarget);
+    target.addEventListener('change', syncFromTarget);
+    syncFromTarget();
+});
+
+const participantsList = document.querySelector('#participants-list');
+const participantsToggle = document.querySelector('[data-participants-toggle]');
+if (participantsList && participantsToggle) {
+    const media = window.matchMedia('(max-width: 48rem)');
+    const collapsedLabel = participantsToggle.querySelector('.when-collapsed');
+    const expandedLabel = participantsToggle.querySelector('.when-expanded');
+
+    const setCollapsed = (collapsed) => {
+        participantsList.classList.toggle('is-collapsed', collapsed);
+        participantsToggle.setAttribute('aria-expanded', String(!collapsed));
+        if (collapsedLabel) {
+            collapsedLabel.hidden = !collapsed;
+        }
+        if (expandedLabel) {
+            expandedLabel.hidden = collapsed;
+        }
+    };
+
+    const applyViewport = () => setCollapsed(media.matches);
+
+    participantsToggle.addEventListener('click', () => {
+        setCollapsed(!participantsList.classList.contains('is-collapsed'));
+    });
+
+    if (typeof media.addEventListener === 'function') {
+        media.addEventListener('change', applyViewport);
+    } else if (typeof media.addListener === 'function') {
+        media.addListener(applyViewport);
+    }
+
+    applyViewport();
+}
 
 const organizerAccess = document.querySelector('#organizer-access');
 const leaveDialog = document.querySelector('#leave-links-dialog');

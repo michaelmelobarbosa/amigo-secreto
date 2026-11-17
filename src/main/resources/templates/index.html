@@ -22,7 +22,11 @@
 
             <div class="field">
                 <label for="eventDate">Data do evento <span class="muted">(opcional)</span></label>
-                <input type="date" id="eventDate" th:field="*{eventDate}">
+                <div class="date-input-wrap">
+                    <input type="date" id="eventDate" th:field="*{eventDate}">
+                    <input type="date" class="date-picker-trigger" tabindex="-1" aria-hidden="true"
+                           data-date-trigger-for="eventDate" autocomplete="off">
+                </div>
                 <p class="field-error" th:if="${#fields.hasErrors('eventDate')}" th:errors="*{eventDate}"></p>
             </div>
 
