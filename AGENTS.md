@@ -4,13 +4,16 @@ Aplicação web para organizar amigo secreto sem login: acesso por links com tok
 
 ## Documentos que mandam
 
-- [Especificação](<./Amigo Secreto — Especificação do Projeto.md>) — fonte da verdade de escopo, domínio, arquitetura e segurança. Se o código precisar divergir, atualize a spec na mesma entrega.
-- [implementation.md](./implementation.md) — plano por fases, estrutura de pacotes e estado atual. Em caso de divergência com a spec, a spec vence.
-- [DEPLOY_CONCLUIDO.md](./docs/DEPLOY_CONCLUIDO.md) — registro da execução real do deploy (2026-11-15), evidências e pendências. Onde divergir de `DEPLOY.md`/`INFRA-VPS.md`, vale este registro.
+- [Especificação](docs/SPEC.md) — fonte da verdade de escopo, domínio, arquitetura e segurança. Se o código precisar divergir, atualize a spec na mesma entrega.
+- [Desenvolvimento](docs/DEVELOPMENT.md) — arquitetura, convenções, configuração e testes. Em caso de divergência com a spec, a spec vence.
+- [Deploy e operação](docs/DEPLOYMENT.md) — topologia, deploy, borda, backup e troubleshooting.
+- [E-mail](docs/EMAIL.md) e [Segurança](docs/SECURITY.md) — detalhes dos respectivos subsistemas.
+
+O histórico real de deploys e o backlog operacional ficam em um arquivo local não versionado (dados de infraestrutura). Não copie esses dados para a documentação pública.
 
 ## Stack
 
-Java 25 · Spring Boot 4.1.2 (webmvc, data-jpa, validation, thymeleaf) · Flyway · PostgreSQL em dev/prod · H2 só em testes · CSS próprio (Pico.css opcional) · sem SPA, sem Spring Security, sem Lombok.
+Java 25 · Spring Boot 4.1.2 (webmvc, data-jpa, validation, thymeleaf) · Flyway · PostgreSQL em dev/prod · H2 só em testes · CSS próprio, sem SPA · sem Spring Security, sem Lombok.
 
 ## Comandos
 
@@ -25,7 +28,7 @@ Java 25 · Spring Boot 4.1.2 (webmvc, data-jpa, validation, thymeleaf) · Flyway
 
 ## Estrutura
 
-Pacotes por funcionalidade em `br.com.michael.amigosecreto`: `event`, `participant`, `exclusion`, `draw`, `invite`, `admin`, `common`. Direção única: controller → service → repository. Entidade JPA nunca é modelo de tela.
+Pacotes por funcionalidade em `br.com.michael.amigosecreto`: `event`, `participant`, `exclusion`, `draw`, `invite`, `notification`, `email`, `admin`, `common`. Direção única: controller → service → repository. Entidade JPA nunca é modelo de tela.
 
 ## Convenções que não se negociam
 
@@ -37,11 +40,11 @@ Pacotes por funcionalidade em `br.com.michael.amigosecreto`: `event`, `participa
 - **Segurança**: token inválido → 404 (nunca 403, nunca confirma existência). Nunca logar token, nunca ecoar token em erro, nunca expor `Assignment` no painel. CSRF próprio em todo POST. `open-in-view=false`.
 - **Thymeleaf** escapa por padrão: não use `th:utext` com dado de usuário.
 - **Idioma**: identificadores, pacotes e nomes de teste em inglês; comentários, javadoc, mensagens de UI e docs em pt-BR.
-- **Dependência nova** só com justificativa na spec/implementation. O projeto é de portfólio e precisa continuar enxuto.
+- **Dependência nova** só com justificativa na spec. O projeto é de portfólio e precisa continuar enxuto.
 
 ## O que já existe
 
-`CycleDrawSolver` (backtracking com MRV, `RandomGenerator` injetável, orçamento de passos) e `DrawImpossibleException`, com testes. O MVP, a fase 2 de e-mail, o rate limiting e o deploy estão **em produção desde 2026-11-15** (`https://amigo-secreto.barbosalabs.dev`); o Caddy é um stack de borda externo e o registro está em `docs/DEPLOY_CONCLUIDO.md`. P9–P11 foram aplicadas (db 512m, exemplos com aspas, sessão só por cookie); P12 (Caddy `mem_limit: 256m`) foi aplicada e verificada no runtime em 2026-11-16. O e-mail foi **ligado e validado ponta a ponta em 2026-11-16** (2 `SENT`, painel **Enviado**, evento de teste apagado); o SPF foi publicado e o rate limit dos endpoints de e-mail entrou em produção no deploy `6898819`, validado no mesmo dia (11º POST → `429`). Pendentes: cópia off-site do backup, restore completo, reboot e fluxo no navegador.
+O MVP, o e-mail, o rate limiting e o deploy estão **em produção desde 2026-11-15** (`https://amigo-secreto.barbosalabs.dev`), com e-mail validado em 2026-11-16 e interface renovada em 2026-11-17. O Caddy é um stack de borda externo. Backlog operacional e dados reais de infraestrutura ficam no arquivo local não versionado. Segurança e limites em `docs/SECURITY.md`; deploy em `docs/DEPLOYMENT.md`.
 
 ## Agentes do projeto
 

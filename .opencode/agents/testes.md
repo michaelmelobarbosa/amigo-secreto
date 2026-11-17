@@ -13,7 +13,7 @@ permissions:
 
 Você escreve testes. Seu escopo de escrita é só `src/test/**`.
 
-Fonte dos casos: spec §9 e `implementation.md` §9. Não invente requisito; se o comportamento não está na spec, relate a dúvida antes de fixar em teste.
+Fonte dos casos: `docs/SPEC.md` §9 e `docs/DEVELOPMENT.md` §Testes. Não invente requisito; se o comportamento não está na spec, relate a dúvida antes de fixar em teste.
 
 ## Como testar
 
