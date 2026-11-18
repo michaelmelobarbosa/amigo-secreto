@@ -1,44 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
     <defs>
         <linearGradient id="gift-box" x1="11" y1="24" x2="53" y2="57" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#f43f5e"/>
-            <stop offset="0.45" stop-color="#e11d48"/>
-            <stop offset="1" stop-color="#881337"/>
+            <stop stop-color="#10b981"/>
+            <stop offset="0.5" stop-color="#059669"/>
+            <stop offset="1" stop-color="#065f46"/>
         </linearGradient>
         <linearGradient id="gift-lid" x1="7" y1="19" x2="57" y2="30" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#f43f5e"/>
-            <stop offset="0.55" stop-color="#e11d48"/>
-            <stop offset="1" stop-color="#9f1239"/>
+            <stop stop-color="#34d399"/>
+            <stop offset="0.55" stop-color="#059669"/>
+            <stop offset="1" stop-color="#047857"/>
         </linearGradient>
-        <linearGradient id="gift-gold" x1="23" y1="19" x2="41" y2="57" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#fde68a"/>
-            <stop offset="0.3" stop-color="#fbbf24"/>
-            <stop offset="0.68" stop-color="#f59e0b"/>
-            <stop offset="1" stop-color="#b45309"/>
+        <linearGradient id="gift-ribbon" x1="23" y1="12" x2="41" y2="57" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#fed7aa"/>
+            <stop offset="0.32" stop-color="#fb923c"/>
+            <stop offset="0.7" stop-color="#ea580c"/>
+            <stop offset="1" stop-color="#c2410c"/>
         </linearGradient>
     </defs>
 
-    <ellipse cx="32" cy="57.5" rx="21" ry="4" fill="#000" opacity="0.28"/>
+    <ellipse cx="32" cy="57.5" rx="20" ry="3.5" fill="#0f172a" opacity="0.14"/>
 
-    <rect x="11" y="24" width="42" height="33" rx="4" fill="url(#gift-box)"/>
-    <rect x="11" y="24" width="42" height="4" fill="#fff" opacity="0.14"/>
-    <rect x="46" y="24" width="7" height="33" rx="3" fill="#000" opacity="0.16"/>
+    <rect x="11" y="24" width="42" height="33" rx="6" fill="url(#gift-box)"/>
+    <rect x="11" y="24" width="42" height="4" fill="#fff" opacity="0.16"/>
+    <rect x="46" y="24" width="7" height="33" rx="3" fill="#022c22" opacity="0.16"/>
 
-    <rect x="7" y="19" width="50" height="11" rx="3" fill="url(#gift-lid)"/>
-    <rect x="7" y="19" width="50" height="3" rx="1.5" fill="#fff" opacity="0.16"/>
+    <rect x="7" y="18" width="50" height="12" rx="4" fill="url(#gift-lid)"/>
+    <rect x="7" y="18" width="50" height="3" rx="1.5" fill="#fff" opacity="0.22"/>
 
-    <rect x="28" y="24" width="8" height="33" fill="url(#gift-gold)"/>
-    <rect x="33" y="24" width="3" height="33" fill="#92400e" opacity="0.28"/>
+    <rect x="28" y="24" width="8" height="33" fill="url(#gift-ribbon)"/>
+    <rect x="33.5" y="24" width="2.5" height="33" fill="#9a3412" opacity="0.24"/>
 
-    <rect x="23" y="19" width="18" height="11" fill="url(#gift-gold)"/>
-    <rect x="23" y="19" width="18" height="3" fill="#fff" opacity="0.25"/>
+    <rect x="23" y="18" width="18" height="12" fill="url(#gift-ribbon)"/>
+    <rect x="23" y="18" width="18" height="3" fill="#fff" opacity="0.26"/>
 
-    <path d="M32 20c-2.5-7.5-9.5-11-13.2-8.2-3.8 2.9-.6 9.2 6.7 10.2L32 20Z" fill="url(#gift-gold)"/>
-    <path d="M32 20c2.5-7.5 9.5-11 13.2-8.2 3.8 2.9.6 9.2-6.7 10.2L32 20Z" fill="url(#gift-gold)"/>
-    <path d="M32 20c-4.2-3.8-4.4-8.8-1.2-9.8 3.1-1 5.2 4 1.2 9.8Z" fill="#fde68a"/>
-    <path d="M32 20c4.2-3.8 4.4-8.8 1.2-9.8-3.1-1-5.2 4-1.2 9.8Z" fill="#fbbf24"/>
-    <path d="M28.5 19.5 22 28l4.5 1.2 5-8.2-3-1.5Z" fill="#f59e0b"/>
-    <path d="M35.5 19.5 42 28l-4.5 1.2-5-8.2 3-1.5Z" fill="#fbbf24"/>
-    <circle cx="32" cy="19" r="3.4" fill="#fde68a"/>
-    <circle cx="32" cy="19" r="1.7" fill="#b45309" opacity="0.55"/>
+    <path d="M32 19c-2.5-7.5-9.5-11-13.2-8.2-3.8 2.9-.6 9.2 6.7 10.2L32 19Z" fill="url(#gift-ribbon)"/>
+    <path d="M32 19c2.5-7.5 9.5-11 13.2-8.2 3.8 2.9.6 9.2-6.7 10.2L32 19Z" fill="url(#gift-ribbon)"/>
+    <path d="M32 19c-4.2-3.8-4.4-8.8-1.2-9.8 3.1-1 5.2 4 1.2 9.8Z" fill="#fed7aa"/>
+    <path d="M32 19c4.2-3.8 4.4-8.8 1.2-9.8-3.1-1-5.2 4-1.2 9.8Z" fill="#fb923c"/>
+    <circle cx="32" cy="18.5" r="3.4" fill="#fed7aa"/>
+    <circle cx="32" cy="18.5" r="1.6" fill="#c2410c" opacity="0.55"/>
 </svg>

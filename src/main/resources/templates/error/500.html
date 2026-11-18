@@ -4,12 +4,17 @@
 <body>
 <header th:replace="~{fragments/common :: nav('')}"></header>
 <main class="container content" id="conteudo">
-    <section class="notice" aria-labelledby="page-title">
+    <section class="notice error-card" aria-labelledby="page-title">
+        <div class="error-icon-wrap error-icon-danger" aria-hidden="true">
+            <span th:replace="~{fragments/icons :: iconAlert}"></span>
+        </div>
+        <span class="badge badge-danger">Falha interna · 500</span>
         <h1 id="page-title">Algo deu errado</h1>
-        <p>Não foi possível concluir a operação. Tente novamente em instantes.</p>
+        <p class="muted">Não foi possível concluir a operação neste instante. Aguarde alguns segundos e tente novamente.</p>
         <a class="button" th:href="@{/}">Ir para o início</a>
     </section>
 </main>
 <footer th:replace="~{fragments/common :: footer}"></footer>
+<div th:replace="~{fragments/common :: scripts}"></div>
 </body>
 </html>
