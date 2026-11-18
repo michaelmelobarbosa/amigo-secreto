@@ -13,5 +13,7 @@ public record ParticipantPageView(
         String receiverName,
         String receiverWishlist,
         boolean redrawn,
-        String drawnAtLabel) {
+        String drawnAtLabel,
+        String ownUrl,
+        String ownWhatsappUrl) {
 }

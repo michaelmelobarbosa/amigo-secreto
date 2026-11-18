@@ -2,62 +2,178 @@
 <html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments/common :: head('Sua página do amigo secreto')}"></head>
 <body>
-<header th:replace="~{fragments/common :: nav('')}"></header>
+<header th:replace="~{fragments/common :: nav(${page.eventName})}"></header>
 
-<main class="container content" id="conteudo">
+<main class="container content narrow-container" id="conteudo">
     <div class="alert alert-success" role="status" th:if="${message}" th:text="${message}"></div>
     <div class="alert alert-error" role="alert" th:if="${error}" th:text="${error}"></div>
+    <div class="alert alert-error" role="alert" data-validation-summary
+         th:if="${#fields.hasErrors('form.*')}">
+        <strong>Não foi possível salvar a lista.</strong> Confira o campo destacado abaixo.
+    </div>
 
-    <section class="card">
-        <p class="eyebrow">Sua página</p>
-        <h1 th:text="${page.eventName}">Amigo secreto</h1>
-        <p>Olá, <strong th:text="${page.ownName}">Ana</strong>.</p>
-
-        <dl class="details">
+    <section class="card participant-hero">
+        <div class="section-heading">
             <div>
-                <dt>Data</dt>
+                <p class="eyebrow">Sua página individual</p>
+                <h1 th:text="${page.eventName}">Amigo secreto</h1>
+            </div>
+            <span class="badge badge-success" th:if="${page.drawn}">Resultado liberado</span>
+            <span class="badge badge-neutral" th:unless="${page.drawn}">Em espera</span>
+        </div>
+
+        <p class="participant-greeting">Olá, <strong th:text="${page.ownName}">Ana</strong>.</p>
+
+        <dl class="meta-pills">
+            <div class="meta-pill">
+                <dt>
+                    <span th:replace="~{fragments/icons :: iconCalendar}"></span>
+                    <span>Data:</span>
+                </dt>
                 <dd th:text="${page.eventDate == null ? 'A definir' : #temporals.format(page.eventDate, 'dd/MM/yyyy')}">24/12/2026</dd>
             </div>
-            <div>
-                <dt>Valor sugerido</dt>
+            <div class="meta-pill">
+                <dt>
+                    <span th:replace="~{fragments/icons :: iconTag}"></span>
+                    <span>Valor sugerido:</span>
+                </dt>
                 <dd th:text="${page.suggestedValue == null ? 'Sem valor definido' : #numbers.formatCurrency(page.suggestedValue)}">R$ 50,00</dd>
             </div>
         </dl>
     </section>
 
-    <section class="card" th:if="${page.drawn}">
-        <h2>Seu resultado</h2>
-        <p th:if="${page.receiverName != null}">Você tirou: <strong th:text="${page.receiverName}">Fulano</strong></p>
-        <p class="muted" th:if="${page.receiverName == null}">Seu resultado ainda não está disponível. Tente novamente mais tarde.</p>
-        <div class="wishlist-preview" th:if="${page.receiverName != null and !#strings.isEmpty(page.receiverWishlist)}">
-            <h3>Lista de desejos de quem você tirou</h3>
-            <p class="preserve-lines" th:text="${page.receiverWishlist}">Livro ou um jogo de tabuleiro.</p>
+    <section class="card result-card" th:if="${page.drawn}">
+        <div class="section-heading">
+            <h2>Seu resultado</h2>
+            <button class="button secondary button-sm reveal-toggle-btn" type="button"
+                    data-reveal-toggle hidden th:if="${page.receiverName != null}">
+                <span th:replace="~{fragments/icons :: iconEyeOff}"></span>
+                <span data-reveal-toggle-label>Ocultar nome</span>
+            </button>
         </div>
-        <p class="muted" th:if="${page.receiverName != null and #strings.isEmpty(page.receiverWishlist)}">Essa pessoa ainda não informou uma lista de desejos.</p>
+
         <div class="alert alert-warning" role="status" th:if="${page.redrawn}">
-            O sorteio foi refeito em <span th:text="${page.drawnAtLabel}">13/11</span>.
+            O sorteio foi refeito em <strong th:text="${page.drawnAtLabel}">13/11</strong>. Confira seu novo resultado abaixo.
+        </div>
+
+        <div class="reveal-stage" data-reveal-card th:if="${page.receiverName != null}">
+            <div class="reveal-curtain" data-reveal-curtain>
+                <div class="reveal-curtain-icon" aria-hidden="true">
+                    <span th:replace="~{fragments/icons :: iconSparkles}"></span>
+                </div>
+                <h3>Seu amigo secreto está pronto!</h3>
+                <p class="muted">Verifique se ninguém ao redor está olhando para sua tela antes de abrir.</p>
+                <button class="button button-accent" type="button" data-reveal-open>
+                    <span th:replace="~{fragments/icons :: iconEye}"></span>
+                    <span>Toque para revelar</span>
+                </button>
+            </div>
+
+            <div class="reveal-body" data-reveal-body>
+                <p class="reveal-lead">Você tirou: <strong class="reveal-name" th:text="${page.receiverName}">Fulano</strong></p>
+
+                <div class="wishlist-preview" th:if="${!#strings.isEmpty(page.receiverWishlist)}">
+                    <div class="wishlist-preview-header">
+                        <span th:replace="~{fragments/icons :: iconGift}"></span>
+                        <h3>Lista de desejos de quem você tirou</h3>
+                    </div>
+                    <p class="preserve-lines" th:text="${page.receiverWishlist}">Livro ou um jogo de tabuleiro.</p>
+                </div>
+
+                <p class="muted wishlist-empty" th:if="${#strings.isEmpty(page.receiverWishlist)}">
+                    Essa pessoa ainda não informou uma lista de desejos. Volte a este link depois — ela pode atualizar a qualquer momento.
+                </p>
+            </div>
+        </div>
+
+        <p class="muted" th:if="${page.receiverName == null}">
+            Seu resultado ainda não está disponível. Tente novamente mais tarde.
+        </p>
+    </section>
+
+    <section class="card waiting-card" th:unless="${page.drawn}">
+        <div class="waiting-header">
+            <div class="feature-icon feature-icon-accent" aria-hidden="true">
+                <span th:replace="~{fragments/icons :: iconClock}"></span>
+            </div>
+            <div>
+                <h2>Aguarde o sorteio</h2>
+                <p class="muted">O organizador ainda não realizou o sorteio. Enquanto espera, salve seu link pessoal logo abaixo e preencha sua lista de desejos.</p>
+            </div>
         </div>
     </section>
 
-    <section class="card" th:unless="${page.drawn}">
-        <h2>Aguarde o sorteio</h2>
-        <p>O organizador ainda não realizou o sorteio. Volte a este link depois para ver seu resultado.</p>
-    </section>
+    <details class="card vault-card save-link-card" id="participant-own-link" open data-access-vault>
+        <summary class="vault-summary">
+            <div>
+                <p class="eyebrow">Acesso exclusivo</p>
+                <h2>Guarde seu link pessoal</h2>
+            </div>
+            <div class="vault-summary-right">
+                <span class="badge badge-warning" data-vault-badge>Sem senha · Salve agora</span>
+                <span class="vault-chevron" aria-hidden="true"></span>
+            </div>
+        </summary>
+
+        <div class="vault-body">
+            <p class="muted">Como não há senha, este endereço é a única forma de voltar a esta página. Não compartilhe com outras pessoas.</p>
+
+            <div class="url-box">
+                <code th:text="${page.ownUrl}">/p/...</code>
+            </div>
+
+            <div class="row-actions">
+                <button class="button secondary" type="button" th:attr="data-copy=${page.ownUrl}"
+                        aria-label="Copiar meu link individual" data-links-saved>
+                    <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                    <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                    <span>Copiar meu link</span>
+                </button>
+                <a class="button secondary" th:href="${page.ownWhatsappUrl}"
+                   target="_blank" rel="noopener noreferrer" data-links-saved>
+                    <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
+                    <span>Salvar no WhatsApp</span>
+                </a>
+                <button class="button secondary" type="button" data-links-saved data-links-ack>
+                    Já salvei meu link
+                </button>
+            </div>
+        </div>
+    </details>
 
     <section class="card">
         <h2>Sua lista de desejos</h2>
-        <p class="muted">Só você e a pessoa que tirar você poderão ver esta lista.</p>
-        <form th:action="@{/p/{token}/wishlist(token=${accessToken})}" th:object="${form}" method="post">
+        <p class="muted">Só você e a pessoa que tirar você poderão ver esta lista. Ela permanece editável antes e depois do sorteio.</p>
+
+        <form th:action="@{/p/{token}/wishlist(token=${accessToken})}" th:object="${form}" method="post" novalidate>
             <div th:replace="~{fragments/common :: csrf}"></div>
             <div class="field">
-                <label for="own-wishlist">O que você gostaria de ganhar? (opcional)</label>
-                <textarea id="own-wishlist" th:field="*{wishlist}" maxlength="2000" rows="5"></textarea>
-                <p class="field-error" th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>
+                <div class="label-row">
+                    <label for="own-wishlist">Sugestões de presente <span class="optional-tag">opcional</span></label>
+                    <span class="char-counter muted" data-char-for="own-wishlist"></span>
+                </div>
+                <textarea id="own-wishlist" th:field="*{wishlist}" maxlength="2000" rows="4"
+                          data-char-count
+                          placeholder="Sugestões de presentes, tamanhos de roupa/calçado, livros, hobbies ou itens que prefere evitar..."
+                          th:attr="aria-invalid=${#fields.hasErrors('wishlist') ? 'true' : null},aria-describedby=${#fields.hasErrors('wishlist') ? 'own-wishlist-error' : null}"></textarea>
+                <p class="field-error" id="own-wishlist-error"
+                   th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>
             </div>
             <button class="button" type="submit">Salvar lista</button>
         </form>
     </section>
 </main>
+
+<dialog id="leave-links-dialog" class="confirm-dialog" aria-labelledby="leave-links-title">
+    <h2 id="leave-links-title">Sair sem salvar seu link pessoal?</h2>
+    <p>
+        Se você ainda não copiou ou salvou este endereço, vai perder o acesso à sua página individual do amigo secreto.
+    </p>
+    <div class="dialog-actions">
+        <button class="button secondary" type="button" data-dialog-cancel>Ficar e salvar</button>
+        <button class="button danger" type="button" data-dialog-confirm>Continuar e sair</button>
+    </div>
+</dialog>
 
 <footer th:replace="~{fragments/common :: footer}"></footer>
 <div th:replace="~{fragments/common :: scripts}"></div>

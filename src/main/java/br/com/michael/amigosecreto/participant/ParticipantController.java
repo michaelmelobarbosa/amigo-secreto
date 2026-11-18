@@ -1,7 +1,9 @@
 package br.com.michael.amigosecreto.participant;
 
+import br.com.michael.amigosecreto.common.LinkBuilder;
 import br.com.michael.amigosecreto.event.Event;
 import br.com.michael.amigosecreto.event.EventStatus;
+import br.com.michael.amigosecreto.invite.InviteService;
 import br.com.michael.amigosecreto.participant.dto.ParticipantPageView;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -42,9 +44,16 @@ public class ParticipantController {
             "snapchat");
 
     private final ParticipantService participantService;
+    private final LinkBuilder linkBuilder;
+    private final InviteService inviteService;
 
-    public ParticipantController(ParticipantService participantService) {
+    public ParticipantController(
+            ParticipantService participantService,
+            LinkBuilder linkBuilder,
+            InviteService inviteService) {
         this.participantService = participantService;
+        this.linkBuilder = linkBuilder;
+        this.inviteService = inviteService;
     }
 
     @GetMapping("/p/{accessToken}")
@@ -109,7 +118,10 @@ public class ParticipantController {
                 receiverName,
                 receiverWishlist,
                 drawn && event.getDrawCount() > 1,
-                drawnAtLabel);
+                drawnAtLabel,
+                linkBuilder.participant(participant),
+                inviteService.participantWhatsappUrl(
+                        event, participant.getName(), participant.getAccessToken()));
     }
 
     private boolean isPreviewBot(HttpServletRequest request) {
