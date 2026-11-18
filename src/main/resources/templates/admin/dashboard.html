@@ -6,105 +6,70 @@
 
 <main class="container content" id="conteudo">
     <div class="alert alert-success" role="status" th:if="${created}">
-        <strong>Evento criado.</strong> Guarde os três links abaixo. O link do painel é a única forma de voltar aqui.
+        <strong>Evento criado com sucesso.</strong> Salve o link do painel logo abaixo — ele é a única forma de voltar a gerenciar o grupo.
     </div>
     <div class="alert alert-success" role="status" th:if="${message}" th:text="${message}"></div>
     <div class="alert alert-error" role="alert" th:if="${error}" th:text="${error}"></div>
+    <div class="alert alert-error" role="alert" data-validation-summary
+         th:if="${#fields.hasErrors('sendLinksForm.*') or #fields.hasErrors('addParticipantForm.*') or #fields.hasErrors('exclusionGroupForm.*')}">
+        <strong>Não foi possível concluir a ação.</strong> Confira o campo destacado abaixo para corrigir e tentar novamente.
+    </div>
 
-    <section class="card" id="organizer-access"
-             th:attr="data-links-guard=${created} ? 'true' : null">
-        <h2>Seus links</h2>
-        <p class="alert alert-warning" role="alert">
-            <strong>Guarde o link do painel.</strong> Sem ele, você não consegue voltar a gerenciar
-            este evento. Copie, baixe o TXT ou envie para o seu e-mail agora.
-        </p>
-        <div class="link-row">
-            <span class="link-label">Painel Geral</span>
-            <code th:text="${links.adminUrl}">/admin/...</code>
-            <div class="link-actions">
-                <button class="button secondary icon-button" type="button" th:attr="data-copy=${links.adminUrl}"
-                        aria-label="Copiar link do painel geral" title="Copiar link do painel geral"
-                        data-links-saved>
-                    <span th:replace="~{fragments/icons :: iconCopy}"></span>
-                    <span th:replace="~{fragments/icons :: iconCheck}"></span>
-                </button>
-            </div>
-            <p class="muted">Este é o link do painel geral. Guarde-o e não compartilhe: ele dá acesso à gestão do evento.</p>
-        </div>
-        <div class="link-row">
-            <span class="link-label">Você como participante</span>
-            <code th:text="${links.organizerUrl}">/p/...</code>
-            <div class="link-actions">
-                <button class="button secondary icon-button" type="button" th:attr="data-copy=${links.organizerUrl}"
-                        aria-label="Copiar seu link de participante" title="Copiar seu link de participante">
-                    <span th:replace="~{fragments/icons :: iconCopy}"></span>
-                    <span th:replace="~{fragments/icons :: iconCheck}"></span>
-                </button>
-                <a class="button secondary icon-button" th:href="${links.organizerWhatsappUrl}"
-                   target="_blank" rel="noopener noreferrer"
-                   aria-label="Enviar seu link de participante pelo WhatsApp"
-                   title="Enviar seu link de participante pelo WhatsApp">
-                    <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
-                </a>
-            </div>
-            <p class="muted">Este link mostra apenas o seu resultado. O painel não exibe quem tirou quem.</p>
-        </div>
-        <div class="link-row">
-            <span class="link-label">Convite Geral</span>
-            <code th:text="${links.inviteUrl}">/join/...</code>
-            <div class="link-actions">
-                <button class="button secondary icon-button" type="button" th:attr="data-copy=${links.inviteUrl}"
-                        aria-label="Copiar convite geral" title="Copiar convite geral">
-                    <span th:replace="~{fragments/icons :: iconCopy}"></span>
-                    <span th:replace="~{fragments/icons :: iconCheck}"></span>
-                </button>
-                <a class="button secondary icon-button" th:href="${links.inviteWhatsappUrl}"
-                   target="_blank" rel="noopener noreferrer"
-                   aria-label="Enviar convite geral pelo WhatsApp"
-                   title="Enviar convite geral pelo WhatsApp">
-                    <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
-                </a>
-            </div>
-            <p class="muted">Envie o convite geral para cada pessoa no privado. O convite não mostra a lista de participantes.</p>
-        </div>
-
-        <div class="action-grid">
-            <form th:action="@{/admin/{token}/invite/regenerate(token=${adminToken})}" method="post">
-                <div th:replace="~{fragments/common :: csrf}"></div>
-                <button class="button secondary" type="submit">Gerar novo link de convite</button>
-            </form>
-            <a class="button secondary" th:href="@{/admin/{token}/links.txt(token=${adminToken})}"
-               download="amigo-secreto-links.txt" data-links-saved>Baixar links (.txt)</a>
-            <button class="button secondary" type="button" th:if="${created}"
-                    data-links-saved data-links-ack>Já salvei os links</button>
-        </div>
-
-        <div class="subsection">
-            <h3>Enviar seus links por e-mail</h3>
-            <p class="muted">O endereço é usado só neste envio e não fica salvo no evento.</p>
-            <form th:action="@{/admin/{token}/links/email(token=${adminToken})}"
-                  th:object="${sendLinksForm}" method="post">
-                <div th:replace="~{fragments/common :: csrf}"></div>
-                <div class="field">
-                    <label for="links-email">E-mail para receber os links</label>
-                    <input id="links-email" type="email" th:field="*{email}" maxlength="254"
-                           autocomplete="email" placeholder="voce@exemplo.com">
-                    <p class="field-error" th:if="${#fields.hasErrors('email')}"
-                       th:errors="*{email}">Erro no e-mail</p>
-                </div>
-                <button class="button" type="submit">Enviar links</button>
-            </form>
-        </div>
-    </section>
-
-    <section class="card">
+    <section class="card dashboard-hero">
         <div class="section-heading">
             <div>
-                <p class="eyebrow">Evento</p>
+                <p class="eyebrow">Painel de gestão</p>
                 <h1 th:text="${event.eventName}">Família</h1>
             </div>
-            <span class="badge" th:text="${event.statusLabel}">Inscrições abertas</span>
+            <div class="hero-status-actions">
+                <span class="badge"
+                      th:classappend="${event.drawn ? ' badge-success' : (event.registrationOpen ? ' badge-success' : ' badge-warning')}"
+                      th:text="${event.statusLabel}">Inscrições abertas</span>
+                <form th:if="${event.canEdit}"
+                      th:action="@{/admin/{token}/registration(token=${adminToken})}" method="post"
+                      th:attr="data-confirm-title=${event.registrationOpen ? 'Pausar novas inscrições?' : null},data-confirm=${event.registrationOpen ? 'Quem abrir o link de convite verá que as inscrições estão encerradas até você reabri-las.' : null},data-confirm-cta=${event.registrationOpen ? 'Encerrar inscrições' : null}">
+                    <div th:replace="~{fragments/common :: csrf}"></div>
+                    <input type="hidden" name="open" th:value="${!event.registrationOpen}">
+                    <button class="button secondary button-sm" type="submit"
+                            th:text="${event.registrationOpen ? 'Encerrar inscrições' : 'Abrir inscrições'}">Encerrar inscrições</button>
+                </form>
+            </div>
         </div>
+
+        <ol class="stepper" aria-label="Etapas de organização">
+            <li class="step-item is-current" data-step-vault aria-current="step">
+                <span class="step-num">1</span>
+                <div>
+                    <strong>Guardar acesso</strong>
+                    <span class="step-meta" data-step-vault-meta>Salve seus links</span>
+                </div>
+            </li>
+            <li class="step-item"
+                th:classappend="${!event.drawn and !event.canDraw ? ' is-current' : ' is-done'}"
+                th:attr="aria-current=${!event.drawn and !event.canDraw ? 'step' : null}">
+                <span class="step-num">2</span>
+                <div>
+                    <strong>Participantes</strong>
+                    <span class="step-meta" th:text="|${event.participantCount} na lista|">1 na lista</span>
+                </div>
+            </li>
+            <li class="step-item" th:classappend="${!event.exclusionGroups.isEmpty() ? ' is-done' : ''}">
+                <span class="step-num">3</span>
+                <div>
+                    <strong>Restrições</strong>
+                    <span class="step-meta" th:text="${event.exclusionGroups.isEmpty() ? 'Opcional' : event.exclusionGroups.size() + ' grupo(s)'}">Opcional</span>
+                </div>
+            </li>
+            <li class="step-item"
+                th:classappend="${event.drawn ? ' is-done' : (event.canDraw ? ' is-current' : '')}"
+                th:attr="aria-current=${!event.drawn and event.canDraw ? 'step' : null}">
+                <span class="step-num">4</span>
+                <div>
+                    <strong>Sorteio</strong>
+                    <span class="step-meta" th:text="${event.drawn ? 'Concluído' : (event.canDraw ? 'Liberado' : 'Aguardando mínimo')}">Aguardando mínimo</span>
+                </div>
+            </li>
+        </ol>
 
         <dl class="details">
             <div>
@@ -125,207 +90,159 @@
             </div>
         </dl>
 
-        <div class="row-actions" th:if="${event.canEdit}">
-            <form th:action="@{/admin/{token}/registration(token=${adminToken})}" method="post">
-                <div th:replace="~{fragments/common :: csrf}"></div>
-                <input type="hidden" name="open" th:value="${!event.registrationOpen}">
-                <button class="button secondary" type="submit"
-                        th:text="${event.registrationOpen ? 'Encerrar inscrições' : 'Abrir inscrições'}">Encerrar inscrições</button>
-            </form>
-        </div>
-        <p class="muted" th:if="${event.canEdit and !event.registrationOpen}">As inscrições estão encerradas; você pode reabri-las enquanto o evento não for sorteado.</p>
-    </section>
-
-    <section class="card">
-        <div class="section-heading">
-            <h2>Participantes</h2>
-            <button class="button secondary participants-toggle" type="button"
-                    data-participants-toggle aria-controls="participants-list" aria-expanded="true"
-                    th:if="${!event.participants.isEmpty()}">
-                <span class="when-collapsed" th:text="|Mostrar lista (${event.participants.size()})|">Mostrar lista (1)</span>
-                <span class="when-expanded" hidden th:text="|Ocultar lista (${event.participants.size()})|">Ocultar lista (1)</span>
-            </button>
-        </div>
-
-        <div class="alert alert-warning" role="alert" th:if="${event.hasDuplicateNames}">
-            Há nomes repetidos. Confira com o organizador para não sortear a pessoa errada.
-        </div>
-
-        <div class="table-wrap participants-list" id="participants-list"
-             th:if="${!event.participants.isEmpty()}">
-            <table class="participants-table">
-                <thead>
-                <tr>
-                    <th scope="col">Nome</th>
-                    <th scope="col">E-mail</th>
-                    <th scope="col">Status do e-mail</th>
-                    <th scope="col">Link individual</th>
-                    <th scope="col">Já visualizou</th>
-                    <th scope="col">Ações</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="row : ${event.participants}">
-                    <td class="participant-name">
-                        <span th:text="${row.name}">Ana</span>
-                        <span class="badge" th:if="${row.organizer}">Organizador</span>
-                        <span class="badge badge-warning" th:if="${row.duplicateName}">Nome repetido</span>
-                    </td>
-                    <td class="email-cell" data-label="E-mail"
-                        th:text="${row.emailStatusLabel == 'Sem e-mail' ? 'Sem e-mail' : row.email}">pessoa@example.com</td>
-                    <td data-label="Status do e-mail">
-                        <span th:text="${row.emailStatusLabel}">Aguardando sorteio</span>
-                    </td>
-                    <td data-label="Link individual">
-                        <div class="row-actions">
-                            <button class="button secondary icon-button" type="button"
-                                    th:attr="data-copy=${row.participantUrl},aria-label=${'Copiar link de ' + row.name},title=${'Copiar link de ' + row.name}">
-                                <span th:replace="~{fragments/icons :: iconCopy}"></span>
-                                <span th:replace="~{fragments/icons :: iconCheck}"></span>
-                            </button>
-                            <a class="button secondary icon-button" th:href="${row.whatsappUrl}"
-                               target="_blank" rel="noopener noreferrer"
-                               th:attr="aria-label=${'Enviar link de ' + row.name + ' pelo WhatsApp'},title=${'Enviar link de ' + row.name + ' pelo WhatsApp'}">
-                                <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
-                            </a>
-                        </div>
-                    </td>
-                    <td data-label="Já visualizou" th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</td>
-                    <td data-label="Ações">
-                        <div class="row-actions">
-                            <form class="resend-email-form" th:if="${row.canResendEmail}"
-                                  th:action="@{/admin/{token}/participants/{id}/email/resend(token=${adminToken},id=${row.id})}"
-                                  method="post" data-confirm="Reenviar o e-mail para este participante?">
-                                <div th:replace="~{fragments/common :: csrf}"></div>
-                                <button class="button secondary" type="submit">Reenviar</button>
-                            </form>
-                            <form th:if="${row.canRemove}"
-                                  th:action="@{/admin/{token}/participants/{id}/delete(token=${adminToken},id=${row.id})}"
-                                  method="post" th:attr="data-confirm=|Remover ${row.name}?|">
-                                <div th:replace="~{fragments/common :: csrf}"></div>
-                                <button class="button danger" type="submit">Remover</button>
-                            </form>
-                            <span class="muted" th:if="${event.canEdit and row.organizer}">Não pode ser removido</span>
-                            <span class="muted"
-                                  th:if="${!row.canResendEmail and !row.canRemove and !(event.canEdit and row.organizer)}">—</span>
-                        </div>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-        <p class="muted" th:if="${event.participants.isEmpty()}">Ainda não há participantes. Convide alguém ou adicione pelo formulário abaixo.</p>
-
-        <div class="subsection" th:if="${event.canAddParticipant}">
-            <h3>Adicionar participante</h3>
-            <form th:action="@{/admin/{token}/participants(token=${adminToken})}" th:object="${addParticipantForm}" method="post">
-                <div th:replace="~{fragments/common :: csrf}"></div>
-                <div class="field">
-                    <label for="participant-name">Nome</label>
-                    <input id="participant-name" type="text" th:field="*{name}" maxlength="80" required autocomplete="name">
-                    <p class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Erro no nome</p>
-                </div>
-                <div class="field">
-                    <label for="participant-email">E-mail para receber o link (opcional)</label>
-                    <input id="participant-email" type="email" th:field="*{email}" maxlength="254" autocomplete="email">
-                    <p class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">Erro no e-mail</p>
-                </div>
-                <div class="field">
-                    <label for="participant-wishlist">Lista de desejos (opcional)</label>
-                    <textarea id="participant-wishlist" th:field="*{wishlist}" maxlength="2000" rows="4"></textarea>
-                    <p class="field-error" th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>
-                </div>
-                <button class="button" type="submit">Adicionar</button>
-            </form>
-        </div>
-        <p class="muted" th:if="${event.canEdit and !event.canAddParticipant}">O limite de 100 participantes foi atingido.</p>
-        <p class="muted" th:if="${!event.canEdit}">A lista fica bloqueada depois que os resultados forem definidos.</p>
-    </section>
-
-    <section class="card">
-        <h2>Restrições</h2>
-        <p class="muted">Pessoas do mesmo grupo não podem tirar umas às outras.</p>
-
-        <div class="exclusion-groups" th:if="${!event.exclusionGroups.isEmpty()}">
-            <article class="exclusion-group" th:each="group : ${event.exclusionGroups}">
-                <div class="section-heading">
-                    <div>
-                        <h3 th:text="${group.label == null or #strings.isEmpty(#strings.trim(group.label)) ? 'Sem nome' : group.label}">Família</h3>
-                        <ul>
-                            <li th:each="memberName : ${group.memberNames}" th:text="${memberName}">Ana</li>
-                        </ul>
-                    </div>
-                    <form th:if="${event.canManageExclusions}"
-                          th:action="@{/admin/{token}/exclusions/{id}/delete(token=${adminToken},id=${group.id})}"
-                          method="post"
-                          data-confirm="Remover este grupo de restrição?">
-                        <div th:replace="~{fragments/common :: csrf}"></div>
-                        <button class="button danger" type="submit">Remover</button>
-                    </form>
-                </div>
-            </article>
-        </div>
-        <p class="muted" th:if="${event.exclusionGroups.isEmpty()}">Nenhum grupo de restrição foi criado.</p>
-
-        <div class="subsection" th:if="${event.canManageExclusions}">
-            <h3>Adicionar restrição</h3>
-            <p class="muted" th:if="${event.participants.size() &lt; 2}">Adicione pelo menos mais uma pessoa para criar uma restrição.</p>
-            <form th:if="${event.participants.size() &gt;= 2}"
-                  th:action="@{/admin/{token}/exclusions(token=${adminToken})}"
-                  th:object="${exclusionGroupForm}"
-                  method="post">
-                <div th:replace="~{fragments/common :: csrf}"></div>
-                <div class="field">
-                    <label for="exclusion-label">Nome do grupo (opcional)</label>
-                    <input id="exclusion-label" type="text" th:field="*{label}" maxlength="80">
-                    <p class="field-error" th:if="${#fields.hasErrors('label')}" th:errors="*{label}">Erro no nome do grupo</p>
-                </div>
-                <fieldset class="field">
-                    <legend>Participantes do grupo</legend>
-                    <div class="checkbox-list">
-                        <div class="checkbox-option" th:each="participant : ${event.participants}">
-                            <input type="checkbox" name="memberIds" th:id="|member-${participant.id}|"
-                                   th:value="${participant.id}"
-                                   th:checked="${exclusionGroupForm.memberIds.contains(participant.id)}">
-                            <label th:for="|member-${participant.id}|" th:text="${participant.name}">Ana</label>
-                        </div>
-                    </div>
-                    <p class="field-error" th:if="${#fields.hasErrors('memberIds')}" th:errors="*{memberIds}">Selecione pelo menos 2 participantes.</p>
-                </fieldset>
-                <button class="button" type="submit">Criar restrição</button>
-            </form>
-        </div>
-        <p class="alert alert-warning" role="status" th:if="${!event.canManageExclusions}">
-            As restrições ficam bloqueadas depois do sorteio. Reabra o evento para editar.
+        <p class="muted status-note" th:if="${event.canEdit and !event.registrationOpen}">
+            As inscrições pelo link público estão pausadas; você ainda pode adicionar pessoas manualmente ou reabri-las enquanto os resultados não forem definidos.
         </p>
     </section>
 
-    <section class="card">
-        <h2>Sorteio</h2>
-        <div th:if="${!event.drawn}">
-            <form th:if="${event.canDraw}"
-                  th:action="@{/admin/{token}/draw(token=${adminToken})}"
-                  method="post"
-                  data-confirm="Sortear agora? O resultado será mostrado apenas a cada participante.">
-                <div th:replace="~{fragments/common :: csrf}"></div>
-                <button class="button" type="submit">Sortear</button>
-            </form>
-            <div th:if="${!event.canDraw}">
-                <button class="button" type="button" disabled aria-describedby="draw-disabled-reason">Sortear</button>
-                <p class="muted" id="draw-disabled-reason" th:text="${event.drawDisabledReason}">São necessários pelo menos 3 participantes.</p>
+    <details class="card vault-card" id="organizer-access" open data-access-vault
+             th:classappend="${created} ? ' is-highlighted' : ''"
+             th:attr="data-force-open=${#fields.hasErrors('sendLinksForm.*') or (created != null and created)} ? 'true' : null">
+        <summary class="vault-summary">
+            <div>
+                <p class="eyebrow">1 · Credenciais de acesso</p>
+                <h2>Seus links</h2>
             </div>
+            <div class="vault-summary-right">
+                <span class="badge badge-warning" data-vault-badge>Sem senha · Guarde com você</span>
+                <span class="vault-chevron" aria-hidden="true"></span>
+            </div>
+        </summary>
+
+        <div class="vault-body">
+            <p class="alert alert-warning" role="status">
+                <strong>Guarde o link do painel.</strong> Sem ele, você não consegue voltar a gerenciar este evento. Copie, baixe o TXT ou envie uma cópia para seu e-mail.
+            </p>
+
+            <div class="vault-grid">
+                <div class="vault-item vault-item-secret">
+                    <div class="vault-item-head">
+                        <span class="vault-title">
+                            <span th:replace="~{fragments/icons :: iconLock}"></span>
+                            <span>Painel Geral</span>
+                        </span>
+                        <span class="badge badge-danger">Não compartilhe</span>
+                    </div>
+                    <p class="muted">Dá controle total sobre a gestão do evento.</p>
+                    <div class="url-box">
+                        <code th:text="${links.adminUrl}">/admin/...</code>
+                    </div>
+                    <div class="row-actions">
+                        <button class="button secondary button-sm" type="button" th:attr="data-copy=${links.adminUrl}"
+                                aria-label="Copiar link do painel geral" title="Copiar link do painel geral"
+                                data-links-saved>
+                            <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                            <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                            <span>Copiar link do painel</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="vault-item">
+                    <div class="vault-item-head">
+                        <span class="vault-title">
+                            <span th:replace="~{fragments/icons :: iconGift}"></span>
+                            <span>Você como participante</span>
+                        </span>
+                        <span class="badge badge-neutral">Sua página</span>
+                    </div>
+                    <p class="muted">Mostra somente o seu resultado individual e sua própria lista de desejos.</p>
+                    <div class="url-box">
+                        <code th:text="${links.organizerUrl}">/p/...</code>
+                    </div>
+                    <div class="row-actions">
+                        <button class="button secondary icon-button" type="button" th:attr="data-copy=${links.organizerUrl}"
+                                aria-label="Copiar seu link de participante" title="Copiar seu link de participante">
+                            <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                            <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                        </button>
+                        <a class="button secondary icon-button" th:href="${links.organizerWhatsappUrl}"
+                           target="_blank" rel="noopener noreferrer"
+                           aria-label="Enviar seu link de participante pelo WhatsApp"
+                           title="Enviar seu link de participante pelo WhatsApp">
+                            <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
+                        </a>
+                        <a class="button secondary button-sm" th:href="${links.organizerUrl}"
+                           target="_blank" rel="noopener noreferrer">
+                            <span>Abrir minha página</span>
+                            <span th:replace="~{fragments/icons :: iconExternal}"></span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vault-toolbar">
+                <a class="button secondary" th:href="@{/admin/{token}/links.txt(token=${adminToken})}"
+                   download="amigo-secreto-links.txt" data-links-saved>
+                    <span th:replace="~{fragments/icons :: iconDownload}"></span>
+                    <span>Baixar links (.txt)</span>
+                </a>
+                <button class="button secondary" type="button" data-links-saved data-links-ack>
+                    Já salvei os links
+                </button>
+            </div>
+
+            <details class="collapsible"
+                     th:attr="open=${#fields.hasErrors('sendLinksForm.*') or (created != null and created)} ? 'open' : null">
+                <summary>
+                    <span th:replace="~{fragments/icons :: iconMail}"></span>
+                    <span>Enviar seus links por e-mail</span>
+                </summary>
+                <div class="collapsible-body">
+                    <p class="muted">O endereço informado é usado apenas neste disparo e não fica armazenado no evento.</p>
+                    <form class="inline-email-form"
+                          th:action="@{/admin/{token}/links/email(token=${adminToken})}"
+                          th:object="${sendLinksForm}" method="post" novalidate>
+                        <div th:replace="~{fragments/common :: csrf}"></div>
+                        <div class="field">
+                            <label for="links-email">E-mail para receber os links</label>
+                            <div class="inline-input-action">
+                                <input id="links-email" type="email" th:field="*{email}" maxlength="254"
+                                       autocomplete="email" placeholder="voce@exemplo.com"
+                                       th:attr="aria-invalid=${#fields.hasErrors('email') ? 'true' : null},aria-describedby=${#fields.hasErrors('email') ? 'links-email-error' : null}">
+                                <button class="button" type="submit">Enviar links</button>
+                            </div>
+                            <p class="field-error" id="links-email-error"
+                               th:if="${#fields.hasErrors('email')}"
+                               th:errors="*{email}">Erro no e-mail</p>
+                        </div>
+                    </form>
+                </div>
+            </details>
         </div>
-        <div th:if="${event.drawn}">
-            <p>Sorteio realizado em <strong th:text="${event.drawnAtLabel}">13/11/2026 12:00</strong>.</p>
+    </details>
+
+    <section class="card draw-bento" id="drawn-card" th:if="${event.drawn}">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">2 · Definição dos pares</p>
+                <h2>Sorteio</h2>
+            </div>
             <span class="badge badge-warning" th:if="${event.redrawn}">Sorteio refeito</span>
+        </div>
+
+        <div class="draw-state-body">
+            <div class="drawn-summary">
+                <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                <div>
+                    <p class="drawn-summary-title">Sorteio realizado em <strong th:text="${event.drawnAtLabel}">13/11/2026 12:00</strong></p>
+                    <p class="muted">Cada pessoa consulta seu par exclusivamente pelo próprio link individual.</p>
+                </div>
+            </div>
+
             <div class="row-actions">
                 <form th:action="@{/admin/{token}/redraw(token=${adminToken})}" method="post"
-                      data-confirm="Refazer o sorteio? Todos os resultados atuais serão descartados.">
+                      data-confirm-title="Refazer o sorteio?"
+                      data-confirm="Todos os resultados atuais serão descartados e novos pares serão gerados nos mesmos links."
+                      data-confirm-cta="Refazer sorteio"
+                      data-confirm-variant="danger">
                     <div th:replace="~{fragments/common :: csrf}"></div>
                     <button class="button" type="submit">Refazer sorteio</button>
                 </form>
                 <form th:action="@{/admin/{token}/reopen(token=${adminToken})}" method="post"
-                      data-confirm="Reabrir para editar? Os resultados atuais serão descartados.">
+                      data-confirm-title="Reabrir evento para edição?"
+                      data-confirm="Os resultados atuais serão descartados para permitir adicionar ou remover participantes e restrições."
+                      data-confirm-cta="Reabrir e editar">
                     <div th:replace="~{fragments/common :: csrf}"></div>
                     <button class="button secondary" type="submit">Reabrir e editar</button>
                 </form>
@@ -333,14 +250,344 @@
         </div>
     </section>
 
+    <section class="card invite-bento" id="invite-card" th:if="${!event.drawn}">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">2 · Compartilhar com o grupo</p>
+                <h2>Convite Geral</h2>
+            </div>
+            <span class="badge"
+                  th:classappend="${event.registrationOpen ? ' badge-success' : ' badge-neutral'}"
+                  th:text="${event.registrationOpen ? 'Ativo' : 'Fechado'}">Ativo</span>
+        </div>
+        <p class="muted">Envie este endereço para quem vai participar. Ele não exibe a lista de inscritos.</p>
+
+        <div class="url-box">
+            <code th:text="${links.inviteUrl}">/join/...</code>
+        </div>
+
+        <div class="row-actions">
+            <a class="button" th:href="${links.inviteWhatsappUrl}"
+               target="_blank" rel="noopener noreferrer"
+               aria-label="Enviar convite geral pelo WhatsApp"
+               title="Enviar convite geral pelo WhatsApp">
+                <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
+                <span>Compartilhar no WhatsApp</span>
+            </a>
+            <button class="button secondary" type="button" th:attr="data-copy=${links.inviteUrl}"
+                    aria-label="Copiar convite geral" title="Copiar convite geral">
+                <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                <span>Copiar convite</span>
+            </button>
+        </div>
+
+        <div class="card-footer-inline">
+            <form th:action="@{/admin/{token}/invite/regenerate(token=${adminToken})}" method="post"
+                  data-confirm-title="Gerar novo link de convite?"
+                  data-confirm="O código de convite atual deixará de funcionar imediatamente. Os links individuais de quem já entrou continuam válidos."
+                  data-confirm-cta="Gerar novo código">
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <button class="button ghost button-sm" type="submit">
+                    <span th:replace="~{fragments/icons :: iconRefresh}"></span>
+                    <span>Gerar novo link de convite</span>
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <details class="card vault-card" id="participants-card" open data-collapsible-section="participants">
+        <summary class="vault-summary">
+            <div>
+                <p class="eyebrow">3 · Lista do grupo</p>
+                <div class="heading-with-count">
+                    <h2>Participantes</h2>
+                    <span class="count-pill" th:text="${event.participants.size()}">1</span>
+                </div>
+            </div>
+            <div class="vault-summary-right">
+                <span class="badge badge-warning" th:if="${event.hasDuplicateNames}">Nomes repetidos</span>
+                <span class="vault-chevron" aria-hidden="true"></span>
+            </div>
+        </summary>
+
+        <div class="vault-body">
+            <div class="alert alert-warning" role="alert" th:if="${event.hasDuplicateNames}">
+                Há nomes repetidos na lista. Diferencie com sobrenome ou apelido para evitar confusão.
+            </div>
+
+            <div class="table-wrap participants-list" id="participants-list"
+                 th:if="${!event.participants.isEmpty()}">
+                <table class="participants-table">
+                    <thead>
+                    <tr>
+                        <th scope="col">Nome</th>
+                        <th scope="col">E-mail</th>
+                        <th scope="col">Status do e-mail</th>
+                        <th scope="col">Link individual</th>
+                        <th scope="col">Já visualizou</th>
+                        <th scope="col">Ações</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="row : ${event.participants}">
+                        <td class="participant-name">
+                            <span class="avatar" aria-hidden="true"
+                                  th:text="${#strings.toUpperCase(#strings.substring(row.name, 0, 1))}">A</span>
+                            <span class="participant-name-text" th:text="${row.name}">Ana</span>
+                            <span class="badge badge-success" th:if="${row.organizer}">Organizador</span>
+                            <span class="badge badge-warning" th:if="${row.duplicateName}">Nome repetido</span>
+                        </td>
+                        <td class="email-cell" data-label="E-mail">
+                            <span th:classappend="${row.emailStatusLabel == 'Sem e-mail' ? 'muted' : ''}"
+                                  th:text="${row.emailStatusLabel == 'Sem e-mail' ? 'Sem e-mail' : row.email}">pessoa@example.com</span>
+                        </td>
+                        <td data-label="Status do e-mail">
+                            <span class="badge"
+                                  th:classappend="${row.emailStatusLabel == 'Enviado' ? ' badge-success' : (row.emailStatusLabel == 'Falhou' ? ' badge-danger' : (row.emailStatusLabel == 'Sem e-mail' ? ' badge-neutral' : ' badge-warning'))}"
+                                  th:text="${row.emailStatusLabel}">Sem e-mail</span>
+                        </td>
+                        <td data-label="Link individual">
+                            <div class="row-actions">
+                                <button class="button secondary icon-button" type="button"
+                                        th:attr="data-copy=${row.participantUrl},aria-label=${'Copiar link de ' + row.name},title=${'Copiar link de ' + row.name}">
+                                    <span th:replace="~{fragments/icons :: iconCopy}"></span>
+                                    <span th:replace="~{fragments/icons :: iconCheck}"></span>
+                                </button>
+                                <a class="button secondary icon-button" th:href="${row.whatsappUrl}"
+                                   target="_blank" rel="noopener noreferrer"
+                                   th:attr="aria-label=${'Enviar link de ' + row.name + ' pelo WhatsApp'},title=${'Enviar link de ' + row.name + ' pelo WhatsApp'}">
+                                    <span th:replace="~{fragments/icons :: iconWhatsapp}"></span>
+                                </a>
+                            </div>
+                        </td>
+                        <td data-label="Já visualizou">
+                            <span class="viewed-indicator"
+                                  th:classappend="${row.firstViewedAt != null ? ' is-viewed' : ''}"
+                                  th:text="${row.firstViewedAt == null ? 'Não' : 'Sim'}">Não</span>
+                        </td>
+                        <td data-label="Ações">
+                            <div class="row-actions">
+                                <form class="resend-email-form" th:if="${row.canResendEmail}"
+                                      th:action="@{/admin/{token}/participants/{id}/email/resend(token=${adminToken},id=${row.id})}"
+                                      method="post"
+                                      data-confirm-title="Reenviar e-mail?"
+                                      data-confirm="Um novo aviso com o link individual será colocado na fila de envio para este participante."
+                                      data-confirm-cta="Reenviar">
+                                    <div th:replace="~{fragments/common :: csrf}"></div>
+                                    <button class="button secondary button-sm" type="submit">Reenviar</button>
+                                </form>
+                                <form th:if="${row.canRemove}"
+                                      th:action="@{/admin/{token}/participants/{id}/delete(token=${adminToken},id=${row.id})}"
+                                      method="post"
+                                      data-confirm-title="Remover participante?"
+                                      th:attr="data-confirm=|Remover ${row.name} do evento?|"
+                                      data-confirm-cta="Remover"
+                                      data-confirm-variant="danger">
+                                    <div th:replace="~{fragments/common :: csrf}"></div>
+                                    <button class="button danger-outline button-sm" type="submit">Remover</button>
+                                </form>
+                                <span class="muted text-xs" th:if="${event.canEdit and row.organizer}">Fixo</span>
+                                <span class="muted"
+                                      th:if="${!row.canResendEmail and !row.canRemove and !(event.canEdit and row.organizer)}">—</span>
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="muted" th:if="${event.participants.isEmpty()}">Ainda não há participantes. Compartilhe o convite acima ou cadastre manualmente no bloco abaixo.</p>
+            <p class="muted status-note" th:if="${!event.canEdit}">A lista fica bloqueada depois que os resultados forem definidos.</p>
+        </div>
+    </details>
+
+    <section class="card" id="add-participant-card" th:if="${event.canEdit}">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">4 · Cadastro manual</p>
+                <h2>Adicionar participante manualmente</h2>
+            </div>
+            <span class="badge badge-neutral">Opcional</span>
+        </div>
+
+        <div th:if="${event.canAddParticipant}">
+            <p class="muted subsection-desc">Prefira compartilhar o link de convite; use este formulário para cadastrar quem não puder se inscrever sozinho.</p>
+            <form th:action="@{/admin/{token}/participants(token=${adminToken})}" th:object="${addParticipantForm}" method="post" novalidate>
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <div class="field-grid-2">
+                    <div class="field">
+                        <label for="participant-name">Nome</label>
+                        <input id="participant-name" type="text" th:field="*{name}" maxlength="80"
+                               placeholder="Nome ou apelido" required autocomplete="name"
+                               th:attr="aria-invalid=${#fields.hasErrors('name') ? 'true' : null},aria-describedby=${#fields.hasErrors('name') ? 'participant-name-error' : null}">
+                        <p class="field-error" id="participant-name-error"
+                           th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Erro no nome</p>
+                    </div>
+                    <div class="field">
+                        <label for="participant-email">E-mail para receber o link <span class="optional-tag">opcional</span></label>
+                        <input id="participant-email" type="email" th:field="*{email}" maxlength="254"
+                               placeholder="pessoa@exemplo.com" autocomplete="email"
+                               th:attr="aria-invalid=${#fields.hasErrors('email') ? 'true' : null},aria-describedby=${#fields.hasErrors('email') ? 'participant-email-error' : null}">
+                        <p class="field-error" id="participant-email-error"
+                           th:if="${#fields.hasErrors('email')}" th:errors="*{email}">Erro no e-mail</p>
+                    </div>
+                </div>
+                <div class="field">
+                    <div class="label-row">
+                        <label for="participant-wishlist">Lista de desejos <span class="optional-tag">opcional</span></label>
+                        <span class="char-counter muted" data-char-for="participant-wishlist"></span>
+                    </div>
+                    <textarea id="participant-wishlist" th:field="*{wishlist}" maxlength="2000" rows="2"
+                              data-char-count
+                              placeholder="Sugestões opcionais de presente..."
+                              th:attr="aria-invalid=${#fields.hasErrors('wishlist') ? 'true' : null},aria-describedby=${#fields.hasErrors('wishlist') ? 'participant-wishlist-error' : null}"></textarea>
+                    <p class="field-error" id="participant-wishlist-error"
+                       th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>
+                </div>
+                <button class="button" type="submit">Adicionar</button>
+            </form>
+        </div>
+        <p class="muted status-note" th:if="${!event.canAddParticipant}">O limite máximo de 100 participantes foi atingido.</p>
+    </section>
+
+    <section class="card" id="exclusions-card">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow" th:text="${event.drawn ? '4 · Regras de pareamento' : '5 · Regras de pareamento'}">5 · Regras de pareamento</p>
+                <h2>Restrições</h2>
+            </div>
+            <span class="count-pill" th:if="${!event.exclusionGroups.isEmpty()}"
+                  th:text="${event.exclusionGroups.size()}">1</span>
+        </div>
+        <p class="muted">Pessoas incluídas no mesmo grupo nunca tiram umas às outras (ex.: casais, pais e filhos, mesmo setor).</p>
+
+        <div class="exclusion-grid" th:if="${!event.exclusionGroups.isEmpty()}">
+            <article class="exclusion-card" th:each="group : ${event.exclusionGroups}">
+                <div class="exclusion-card-head">
+                    <h3 th:text="${group.label == null or #strings.isEmpty(#strings.trim(group.label)) ? 'Grupo sem nome' : group.label}">Família</h3>
+                    <form th:if="${event.canManageExclusions}"
+                          th:action="@{/admin/{token}/exclusions/{id}/delete(token=${adminToken},id=${group.id})}"
+                          method="post"
+                          data-confirm-title="Remover restrição?"
+                          data-confirm="Remover este grupo de restrição?"
+                          data-confirm-cta="Remover"
+                          data-confirm-variant="danger">
+                        <div th:replace="~{fragments/common :: csrf}"></div>
+                        <button class="button danger-outline button-sm" type="submit">Remover</button>
+                    </form>
+                </div>
+                <ul class="member-pills">
+                    <li class="member-pill" th:each="memberName : ${group.memberNames}" th:text="${memberName}">Ana</li>
+                </ul>
+            </article>
+        </div>
+        <p class="muted empty-hint" th:if="${event.exclusionGroups.isEmpty()}">Nenhum grupo de restrição cadastrado até agora.</p>
+
+        <div class="subsection" th:if="${event.canManageExclusions}">
+            <h3>Criar nova restrição</h3>
+            <p class="muted" th:if="${event.participants.size() &lt; 2}">Adicione pelo menos mais uma pessoa ao evento para montar um grupo de restrição.</p>
+            <form th:if="${event.participants.size() &gt;= 2}"
+                  th:action="@{/admin/{token}/exclusions(token=${adminToken})}"
+                  th:object="${exclusionGroupForm}"
+                  method="post" novalidate>
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <div class="field">
+                    <label for="exclusion-label">Identificação do grupo <span class="optional-tag">opcional</span></label>
+                    <input id="exclusion-label" type="text" th:field="*{label}" maxlength="80"
+                           placeholder="Ex.: Mesmo setor, Cônjuges"
+                           th:attr="aria-invalid=${#fields.hasErrors('label') ? 'true' : null},aria-describedby=${#fields.hasErrors('label') ? 'exclusion-label-error' : null}">
+                    <p class="field-error" id="exclusion-label-error"
+                       th:if="${#fields.hasErrors('label')}" th:errors="*{label}">Erro no nome do grupo</p>
+                </div>
+                <fieldset class="field"
+                          th:attr="aria-invalid=${#fields.hasErrors('memberIds') ? 'true' : null},aria-describedby=${#fields.hasErrors('memberIds') ? 'exclusion-members-error' : null}">
+                    <legend>Selecione 2 ou mais participantes</legend>
+                    <div class="chip-checkbox-grid">
+                        <div class="chip-option" th:each="participant : ${event.participants}">
+                            <input type="checkbox" name="memberIds" th:id="|member-${participant.id}|"
+                                   th:value="${participant.id}"
+                                   th:checked="${exclusionGroupForm.memberIds.contains(participant.id)}">
+                            <label th:for="|member-${participant.id}|" th:text="${participant.name}">Ana</label>
+                        </div>
+                    </div>
+                    <p class="field-error" id="exclusion-members-error"
+                       th:if="${#fields.hasErrors('memberIds')}" th:errors="*{memberIds}">Selecione pelo menos 2 participantes.</p>
+                </fieldset>
+                <button class="button" type="submit">Criar restrição</button>
+            </form>
+        </div>
+        <p class="alert alert-warning" role="status" th:if="${!event.canManageExclusions}">
+            As restrições ficam bloqueadas depois do sorteio. Reabra o evento caso precise editá-las.
+        </p>
+    </section>
+
+    <details class="card vault-card invite-closed-card" th:if="${event.drawn}">
+        <summary class="vault-summary">
+            <div>
+                <p class="eyebrow">5 · Compartilhar com o grupo</p>
+                <h2>Convite Geral</h2>
+            </div>
+            <div class="vault-summary-right">
+                <span class="badge badge-neutral">Fechado</span>
+                <span class="vault-chevron" aria-hidden="true"></span>
+            </div>
+        </summary>
+        <div class="vault-body">
+            <p class="muted">As inscrições públicas estão encerradas porque os pares já foram definidos. Reabra o evento caso precise aceitar novas inscrições.</p>
+            <div class="url-box">
+                <code th:text="${links.inviteUrl}">/join/...</code>
+            </div>
+        </div>
+    </details>
+
+    <section class="card draw-bento" id="draw-card" th:if="${!event.drawn}">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">6 · Definição dos pares</p>
+                <h2>Sorteio</h2>
+            </div>
+        </div>
+
+        <div class="draw-state-body">
+            <p class="muted">Forma um ciclo único respeitando todas as restrições cadastradas acima. O painel nunca revela quem tirou quem.</p>
+
+            <div th:if="${event.canDraw}">
+                <div class="readiness-callout">
+                    <span th:replace="~{fragments/icons :: iconSparkles}"></span>
+                    <span th:text="${event.exclusionGroups.isEmpty() ? 'Requisitos atendidos! Nenhum grupo de restrição ativo no momento.' : 'Requisitos atendidos! ' + event.exclusionGroups.size() + ' grupo(s) de restrição será(ão) respeitado(s).'}">Requisitos atendidos!</span>
+                </div>
+                <form th:action="@{/admin/{token}/draw(token=${adminToken})}"
+                      method="post"
+                      data-confirm-title="Realizar o Sorteio agora?"
+                      th:attr="data-confirm=${event.exclusionGroups.isEmpty() ? 'Nenhum grupo de restrição foi cadastrado. As inscrições públicas serão fechadas automaticamente e o resultado ficará visível apenas para cada participante.' : event.exclusionGroups.size() + ' grupo(s) de restrição ativo(s). As inscrições públicas serão fechadas automaticamente e o resultado ficará visível apenas para cada participante.'}"
+                      data-confirm-cta="Confirmar e sortear">
+                    <div th:replace="~{fragments/common :: csrf}"></div>
+                    <button class="button button-accent button-lg button-block" type="submit">Sortear</button>
+                </form>
+            </div>
+
+            <div th:if="${!event.canDraw}">
+                <button class="button button-lg button-block" type="button" disabled aria-describedby="draw-disabled-reason">Sortear</button>
+                <p class="muted draw-disabled-note" id="draw-disabled-reason" th:text="${event.drawDisabledReason}">São necessários pelo menos 3 participantes.</p>
+            </div>
+        </div>
+    </section>
+
     <section class="card danger-zone">
-        <h2>Apagar evento</h2>
-        <p class="muted">Remove participantes, grupos e resultados. Não dá para desfazer.</p>
-        <form th:action="@{/admin/{token}/delete(token=${adminToken})}" method="post"
-              data-confirm="Apagar o evento e todos os dados? Esta ação não pode ser desfeita.">
-            <div th:replace="~{fragments/common :: csrf}"></div>
-            <button class="button danger" type="submit">Apagar evento</button>
-        </form>
+        <div class="danger-zone-layout">
+            <div>
+                <h2>Apagar evento</h2>
+                <p class="muted">Remove permanentemente participantes, restrições, resultados e histórico de envio. Esta operação não pode ser desfeita.</p>
+            </div>
+            <form th:action="@{/admin/{token}/delete(token=${adminToken})}" method="post"
+                  data-confirm-title="Apagar evento permanentemente?"
+                  data-confirm="Todos os participantes, restrições e resultados serão removidos sem possibilidade de recuperação."
+                  data-confirm-cta="Sim, apagar evento"
+                  data-confirm-variant="danger">
+                <div th:replace="~{fragments/common :: csrf}"></div>
+                <button class="button danger" type="submit">Apagar evento</button>
+            </form>
+        </div>
     </section>
 </main>
 
