@@ -5,21 +5,38 @@
 <header th:replace="~{fragments/common :: nav('')}"></header>
 
 <main class="container content" id="conteudo">
-    <section class="notice">
-        <p class="eyebrow">Convite</p>
-        <h1 th:text="${eventName}">Amigo secreto</h1>
+    <section class="notice ticket-card">
+        <div class="ticket-header">
+            <span class="eyebrow-pill">
+                <span th:replace="~{fragments/icons :: iconClock}"></span>
+                <span>Convite</span>
+            </span>
+            <h1 th:text="${eventName}">Amigo secreto</h1>
+
+            <dl class="meta-pills">
+                <div class="meta-pill">
+                    <dt>
+                        <span th:replace="~{fragments/icons :: iconCalendar}"></span>
+                        <span>Data:</span>
+                    </dt>
+                    <dd th:text="${eventDate == null ? 'A definir' : #temporals.format(eventDate, 'dd/MM/yyyy')}">24/12/2026</dd>
+                </div>
+                <div class="meta-pill">
+                    <dt>
+                        <span th:replace="~{fragments/icons :: iconTag}"></span>
+                        <span>Valor sugerido:</span>
+                    </dt>
+                    <dd th:text="${suggestedValue == null ? 'Sem valor definido' : #numbers.formatCurrency(suggestedValue)}">R$ 50,00</dd>
+                </div>
+            </dl>
+        </div>
+
         <div class="alert alert-warning" role="status">As inscrições para este evento estão encerradas.</div>
         <div class="alert alert-error" role="alert" th:if="${error}" th:text="${error}"></div>
-        <dl class="details">
-            <div>
-                <dt>Data</dt>
-                <dd th:text="${eventDate == null ? 'A definir' : #temporals.format(eventDate, 'dd/MM/yyyy')}">24/12/2026</dd>
-            </div>
-            <div>
-                <dt>Valor sugerido</dt>
-                <dd th:text="${suggestedValue == null ? 'Sem valor definido' : #numbers.formatCurrency(suggestedValue)}">R$ 50,00</dd>
-            </div>
-        </dl>
+
+        <p class="muted">
+            Se você já se inscreveu anteriormente, utilize seu link individual para acompanhar o resultado ou fale com quem organiza o grupo.
+        </p>
     </section>
 </main>
 

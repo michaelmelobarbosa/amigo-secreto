@@ -5,40 +5,80 @@
 <header th:replace="~{fragments/common :: nav('')}"></header>
 
 <main class="container content" id="conteudo">
-    <section class="notice">
-        <p class="eyebrow">Convite para participar</p>
-        <h1 th:text="${eventName}">Amigo secreto</h1>
-        <p>Preencha seus dados para entrar. Você verá apenas seu resultado pelo link individual.</p>
-        <dl class="details">
-            <div>
-                <dt>Data</dt>
-                <dd th:text="${eventDate == null ? 'A definir' : #temporals.format(eventDate, 'dd/MM/yyyy')}">24/12/2026</dd>
-            </div>
-            <div>
-                <dt>Valor sugerido</dt>
-                <dd th:text="${suggestedValue == null ? 'Sem valor definido' : #numbers.formatCurrency(suggestedValue)}">R$ 50,00</dd>
-            </div>
-        </dl>
+    <section class="notice ticket-card">
+        <div class="ticket-header">
+            <span class="eyebrow-pill">
+                <span th:replace="~{fragments/icons :: iconGift}"></span>
+                <span>Convite para participar</span>
+            </span>
+            <h1 th:text="${eventName}">Amigo secreto</h1>
+            <p class="muted">Preencha seus dados para entrar no grupo. Você verá apenas seu próprio resultado pelo link individual gerado a seguir.</p>
+
+            <dl class="meta-pills">
+                <div class="meta-pill">
+                    <dt>
+                        <span th:replace="~{fragments/icons :: iconCalendar}"></span>
+                        <span>Data:</span>
+                    </dt>
+                    <dd th:text="${eventDate == null ? 'A definir' : #temporals.format(eventDate, 'dd/MM/yyyy')}">24/12/2026</dd>
+                </div>
+                <div class="meta-pill">
+                    <dt>
+                        <span th:replace="~{fragments/icons :: iconTag}"></span>
+                        <span>Valor sugerido:</span>
+                    </dt>
+                    <dd th:text="${suggestedValue == null ? 'Sem valor definido' : #numbers.formatCurrency(suggestedValue)}">R$ 50,00</dd>
+                </div>
+            </dl>
+        </div>
+
+        <div class="privacy-callout">
+            <span th:replace="~{fragments/icons :: iconShield}"></span>
+            <span>A lista de participantes não é pública e sua lista de desejos só aparece para quem tirar você.</span>
+        </div>
 
         <div class="alert alert-error" role="alert" th:if="${error}" th:text="${error}"></div>
-        <form th:action="@{/join/{code}(code=${inviteCode})}" th:object="${form}" method="post">
+        <div class="alert alert-error" role="alert" data-validation-summary
+             th:if="${#fields.hasErrors('form.*')}">
+            <strong>Confira os campos destacados abaixo</strong> para concluir sua inscrição.
+        </div>
+
+        <form th:action="@{/join/{code}(code=${inviteCode})}" th:object="${form}" method="post" novalidate>
             <div th:replace="~{fragments/common :: csrf}"></div>
+
             <div class="field">
                 <label for="join-name">Seu nome</label>
-                <input id="join-name" type="text" th:field="*{name}" maxlength="80" required autocomplete="name">
-                <p class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Erro no nome</p>
+                <input id="join-name" type="text" th:field="*{name}" maxlength="80"
+                       placeholder="Seu nome ou apelido no grupo" required autocomplete="name"
+                       th:attr="aria-invalid=${#fields.hasErrors('name') ? 'true' : null},aria-describedby=${#fields.hasErrors('name') ? 'join-name-error' : null}">
+                <p class="field-error" id="join-name-error"
+                   th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Erro no nome</p>
             </div>
+
             <div class="field">
-                <label for="join-email">E-mail para receber o link (opcional)</label>
-                <input id="join-email" type="email" th:field="*{email}" maxlength="254" autocomplete="email">
-                <p class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">Erro no e-mail</p>
+                <label for="join-email">E-mail para receber o link <span class="optional-tag">opcional</span></label>
+                <input id="join-email" type="email" th:field="*{email}" maxlength="254"
+                       placeholder="voce@exemplo.com" autocomplete="email"
+                       th:attr="aria-invalid=${#fields.hasErrors('email') ? 'true' : null},aria-describedby=${#fields.hasErrors('email') ? 'join-email-error' : null}">
+                <p class="field-hint muted">Usado apenas para enviar seu link individual após o sorteio.</p>
+                <p class="field-error" id="join-email-error"
+                   th:if="${#fields.hasErrors('email')}" th:errors="*{email}">Erro no e-mail</p>
             </div>
+
             <div class="field">
-                <label for="join-wishlist">O que você gostaria de ganhar? (opcional)</label>
-                <textarea id="join-wishlist" th:field="*{wishlist}" maxlength="2000" rows="5"></textarea>
-                <p class="field-error" th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>
+                <div class="label-row">
+                    <label for="join-wishlist">Sugestões de presente <span class="optional-tag">opcional</span></label>
+                    <span class="char-counter muted" data-char-for="join-wishlist"></span>
+                </div>
+                <textarea id="join-wishlist" th:field="*{wishlist}" maxlength="2000" rows="4"
+                          data-char-count
+                          placeholder="Ex.: Livros de ficção, camiseta tamanho M, café especial, itens que prefere evitar..."
+                          th:attr="aria-invalid=${#fields.hasErrors('wishlist') ? 'true' : null},aria-describedby=${#fields.hasErrors('wishlist') ? 'join-wishlist-error' : null}"></textarea>
+                <p class="field-error" id="join-wishlist-error"
+                   th:if="${#fields.hasErrors('wishlist')}" th:errors="*{wishlist}">Erro na lista</p>
             </div>
-            <button class="button" type="submit">Participar</button>
+
+            <button class="button button-lg button-block" type="submit">Participar</button>
         </form>
     </section>
 </main>
