@@ -190,8 +190,8 @@ O organizador pode **baixar os três links em um TXT** ou **enviá-los para um e
 
 ### 6.3 Página do participante (`/p/{accessToken}`)
 
-- Antes do sorteio: mensagem de espera, dados do evento e campo de wishlist editável.
-- Depois do sorteio: "Você tirou: **Fulano**", wishlist dele(a), e a própria wishlist editável. Se o sorteio foi refeito, mostra "Sorteio refeito em dd/mm".
+- Antes do sorteio: mensagem de espera, dados do evento, campo de wishlist editável e ações para guardar o próprio link individual (copiar ou salvar no WhatsApp).
+- Depois do sorteio: cortina de privacidade opcional com JS ("Toque para revelar", com opção de ocultar novamente e fallback direto sem JS), exibindo "Você tirou: **Fulano**", a wishlist dele(a) e a própria wishlist editável. Se o sorteio foi refeito, mostra "Sorteio refeito em dd/mm".
 - Na primeira abertura após o sorteio, registra `firstViewedAt`. Robôs de prévia de link (WhatsApp, Telegram, Slack etc.) não contam como visualização.
 
 ### 6.4 Entrada pelo link de convite (`/join/{inviteCode}`)
@@ -398,6 +398,7 @@ porque contêm dados de infraestrutura. Ver [`DEPLOYMENT.md`](DEPLOYMENT.md) e
 - 2026-11-15: endurecimento do deploy: `db` com `mem_limit: 512m`/`cpus: "0.5"`, exemplos de `.env` com `BREVO_FROM_NAME="Amigo Secreto"` e `deploy.sh` validando o arquivo, sessão só por cookie (`tracking-modes: cookie`) com teste e Caddy de borda com `mem_limit: 256m`, verificado no runtime.
 - 2026-11-16: e-mail real ligado e validado ponta a ponta em produção: chave restrita a envio, `.env` com `EMAIL_ENABLED=true`/`BREVO_SANDBOX=false`, 2 notificações `SENT` (`attempts=1`), painel **Enviado**, zero erros e evento de teste apagado. SPF publicado e rate limit dos endpoints de e-mail em produção no mesmo dia, com validação live (10×403 + 11º 429).
 - 2026-11-17: redesign de UI (tema escuro, ícones de presente e tabelas responsivas, além de ajustes nas ações do painel) aplicado e validado em produção no deploy `ded2e4b`, sem migração de schema.
+- 2026-11-18: refatoração do frontend para identidade Bento Contemporâneo com cápsulas táteis (tema claro/escuro com alternador no cabeçalho sem flash de carregamento, `@layer` em CSS nativo e contraste WCAG AA, home com proposta de valor, fluxo sequencial no painel com cofre e lista de participantes recolhíveis e cadastro manual independente, cortina de revelação + guarda do próprio link na página do participante, confirmações em `<dialog>` acessível e harmonização visual de e-mails e erro 429).
 
 ## 15. Fase 2 — e-mail (implementado)
 
