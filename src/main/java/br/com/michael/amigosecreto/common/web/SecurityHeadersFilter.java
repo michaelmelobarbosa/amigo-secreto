@@ -55,6 +55,7 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
         return path.startsWith("/css/")
                 || path.startsWith("/js/")
                 || path.startsWith("/images/")
+                || path.startsWith("/fonts/")
                 || path.startsWith("/webjars/")
                 || path.equals("/favicon.ico")
                 || path.equals("/robots.txt")
