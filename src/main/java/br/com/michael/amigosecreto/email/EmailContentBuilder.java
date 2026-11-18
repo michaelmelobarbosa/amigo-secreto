@@ -32,25 +32,26 @@ public class EmailContentBuilder {
                 + singleLine(event.getName());
 
         String redrawNotice = redrawn
-                ? "<p style=\"margin:0 0 16px;padding:12px;background:#fefce8;border:1px solid #fde047;border-radius:8px;\">"
+                ? "<p style=\"margin:0 0 16px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;color:#92400e;font-size:14px;\">"
                         + "<strong>Sorteio refeito.</strong> O resultado anterior foi descartado; veja o novo.</p>"
                 : "";
 
         String html = """
                 <!DOCTYPE html>
                 <html lang="pt-BR">
-                <body style="margin:0;padding:0;background:#f5f7fa;font-family:Arial,Helvetica,sans-serif;color:#182230;">
-                  <div style="max-width:560px;margin:0 auto;padding:24px;">
-                    <div style="background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;padding:24px;">
-                      <p style="margin:0 0 12px;">Olá, <strong>%s</strong>.</p>
+                <body style="margin:0;padding:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1e293b;line-height:1.55;">
+                  <div style="max-width:560px;margin:0 auto;padding:28px 16px;">
+                    <div style="background:#ffffff;border:1px solid #e2e8f0;border-top:4px solid #059669;border-radius:14px;padding:28px 24px;">
+                      <p style="margin:0 0 6px;font-size:12px;font-weight:bold;letter-spacing:0.06em;text-transform:uppercase;color:#059669;">Amigo Secreto</p>
+                      <p style="margin:0 0 14px;font-size:16px;color:#0f172a;">Olá, <strong>%s</strong>.</p>
                       %s
-                      <p style="margin:0 0 16px;">Seu resultado do amigo secreto <strong>%s</strong> está pronto.</p>
-                      <p style="margin:0 0 20px;">
-                        <a href="%s" style="display:inline-block;padding:12px 18px;background:#075985;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;">Ver meu resultado</a>
+                      <p style="margin:0 0 20px;color:#334155;">Seu resultado do amigo secreto <strong style="color:#0f172a;">%s</strong> está pronto.</p>
+                      <p style="margin:0 0 22px;">
+                        <a href="%s" style="display:inline-block;padding:12px 20px;background:#059669;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:bold;font-size:15px;">Ver meu resultado</a>
                       </p>
-                      <p style="margin:0 0 8px;font-size:14px;color:#475569;">Se o botão não funcionar, copie e cole este link no navegador:</p>
-                      <p style="margin:0 0 20px;font-size:13px;word-break:break-all;">%s</p>
-                      <p style="margin:0;font-size:14px;color:#475569;">Guarde este link: ele é a única forma de ver seu resultado. Não compartilhe.</p>
+                      <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Se o botão não abrir, copie e cole este endereço no navegador:</p>
+                      <p style="margin:0 0 20px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-family:Consolas,monospace;font-size:12px;color:#0f172a;word-break:break-all;">%s</p>
+                      <p style="margin:0;font-size:13px;color:#475569;">Guarde este link: ele é a única forma de ver seu resultado. Não compartilhe.</p>
                     </div>
                   </div>
                 </body>

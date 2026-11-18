@@ -46,16 +46,42 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final Pattern WISHLIST_PATH = Pattern.compile("^/p/[^/]+/wishlist$");
 
     private static final String TOO_MANY_REQUESTS_BODY = """
-            <!doctype html>
+            <!DOCTYPE html>
             <html lang="pt-BR">
             <head>
-              <meta charset="utf-8">
-              <title>Muitas tentativas</title>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <meta name="color-scheme" content="light dark">
+              <meta name="theme-color" content="#f4f6f8">
+              <title>Muitas tentativas · Amigo Secreto</title>
+              <link rel="icon" type="image/svg+xml" href="/images/gift.svg">
+              <link rel="stylesheet" href="/css/app.css">
             </head>
             <body>
-              <h1>Muitas tentativas em pouco tempo</h1>
-              <p>Tente novamente em alguns minutos.</p>
-              <p><a href="/">Voltar ao início</a></p>
+              <header class="site-header">
+                <div class="container header-content">
+                  <a class="brand" href="/">
+                    <img class="brand-icon" src="/images/gift.svg" alt="" width="32" height="32">
+                    <span>Amigo Secreto</span>
+                  </a>
+                  <nav aria-label="Navegação principal">
+                    <a href="/">Início</a>
+                  </nav>
+                </div>
+              </header>
+              <main class="container content" id="conteudo">
+                <section class="notice error-card" aria-labelledby="page-title">
+                  <span class="badge badge-warning">Limite temporário · 429</span>
+                  <h1 id="page-title">Muitas tentativas em pouco tempo</h1>
+                  <p class="muted">Aguarde alguns minutos antes de enviar esta ação novamente.</p>
+                  <a class="button" href="/">Voltar ao início</a>
+                </section>
+              </main>
+              <footer class="site-footer">
+                <div class="container footer-content">
+                  <p>Organize seu amigo secreto sem cadastro e com sigilo.</p>
+                </div>
+              </footer>
             </body>
             </html>
             """;

@@ -80,28 +80,35 @@ public class OrganizerLinksMailer {
         return """
                 <!DOCTYPE html>
                 <html lang="pt-BR">
-                <body style="margin:0;padding:0;background:#f5f7fa;font-family:Arial,Helvetica,sans-serif;color:#182230;">
-                  <div style="max-width:560px;margin:0 auto;padding:24px;">
-                    <div style="background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;padding:24px;">
-                      <p style="margin:0 0 12px;">Olá, <strong>%s</strong>.</p>
-                      <p style="margin:0 0 20px;">Estes são os links do amigo secreto <strong>%s</strong>.</p>
+                <body style="margin:0;padding:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1e293b;line-height:1.55;">
+                  <div style="max-width:560px;margin:0 auto;padding:28px 16px;">
+                    <div style="background:#ffffff;border:1px solid #e2e8f0;border-top:4px solid #059669;border-radius:14px;padding:28px 24px;">
+                      <p style="margin:0 0 6px;font-size:12px;font-weight:bold;letter-spacing:0.06em;text-transform:uppercase;color:#059669;">Amigo Secreto</p>
+                      <p style="margin:0 0 8px;font-size:16px;color:#0f172a;">Olá, <strong>%s</strong>.</p>
+                      <p style="margin:0 0 22px;color:#334155;">Estes são os links de acesso do amigo secreto <strong style="color:#0f172a;">%s</strong>.</p>
 
-                      <h2 style="margin:0 0 8px;font-size:18px;">Painel do organizador</h2>
-                      <p style="margin:0 0 8px;"><a href="%s" style="color:#075985;">Abrir o painel</a></p>
-                      <p style="margin:0 0 8px;font-size:13px;word-break:break-all;">%s</p>
-                      <p style="margin:0 0 20px;padding:12px;background:#fefce8;border:1px solid #fde047;border-radius:8px;font-size:14px;">
-                        <strong>Não compartilhe este link.</strong> Sem ele, você não consegue voltar a gerenciar o evento.
-                      </p>
+                      <div style="margin:0 0 16px;padding:16px;background:#fffafa;border:1px solid #fecaca;border-radius:10px;">
+                        <h2 style="margin:0 0 6px;font-size:16px;color:#0f172a;">Painel do organizador (privado)</h2>
+                        <p style="margin:0 0 8px;"><a href="%s" style="color:#059669;font-weight:bold;">Abrir o painel</a></p>
+                        <p style="margin:0 0 10px;font-family:Consolas,monospace;font-size:12px;color:#0f172a;word-break:break-all;">%s</p>
+                        <p style="margin:0;font-size:13px;color:#991b1b;">
+                          <strong>Não compartilhe este link.</strong> Sem ele, você não consegue voltar a gerenciar o evento.
+                        </p>
+                      </div>
 
-                      <h2 style="margin:0 0 8px;font-size:18px;">Convite para o grupo</h2>
-                      <p style="margin:0 0 8px;"><a href="%s" style="color:#075985;">Abrir o convite</a></p>
-                      <p style="margin:0 0 8px;font-size:13px;word-break:break-all;">%s</p>
-                      <p style="margin:0 0 20px;font-size:14px;color:#475569;">Compartilhe este link com quem vai participar.</p>
+                      <div style="margin:0 0 16px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                        <h2 style="margin:0 0 6px;font-size:16px;color:#0f172a;">Convite para o grupo</h2>
+                        <p style="margin:0 0 8px;"><a href="%s" style="color:#059669;font-weight:bold;">Abrir o convite</a></p>
+                        <p style="margin:0 0 8px;font-family:Consolas,monospace;font-size:12px;color:#0f172a;word-break:break-all;">%s</p>
+                        <p style="margin:0;font-size:13px;color:#475569;">Compartilhe este link com quem vai participar.</p>
+                      </div>
 
-                      <h2 style="margin:0 0 8px;font-size:18px;">Seu link como participante</h2>
-                      <p style="margin:0 0 8px;"><a href="%s" style="color:#075985;">Ver meu resultado</a></p>
-                      <p style="margin:0 0 8px;font-size:13px;word-break:break-all;">%s</p>
-                      <p style="margin:0;font-size:14px;color:#475569;">Guarde este link: ele mostra seu resultado e sua lista de desejos.</p>
+                      <div style="margin:0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                        <h2 style="margin:0 0 6px;font-size:16px;color:#0f172a;">Seu link como participante</h2>
+                        <p style="margin:0 0 8px;"><a href="%s" style="color:#059669;font-weight:bold;">Ver meu resultado</a></p>
+                        <p style="margin:0 0 8px;font-family:Consolas,monospace;font-size:12px;color:#0f172a;word-break:break-all;">%s</p>
+                        <p style="margin:0;font-size:13px;color:#475569;">Guarde este link: ele mostra seu resultado e sua lista de desejos.</p>
+                      </div>
                     </div>
                   </div>
                 </body>
