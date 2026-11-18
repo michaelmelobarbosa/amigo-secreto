@@ -4,12 +4,17 @@
 <body>
 <header th:replace="~{fragments/common :: nav('')}"></header>
 <main class="container content" id="conteudo">
-    <section class="notice" aria-labelledby="page-title">
+    <section class="notice error-card" aria-labelledby="page-title">
+        <div class="error-icon-wrap" aria-hidden="true">
+            <span th:replace="~{fragments/icons :: iconGift}"></span>
+        </div>
+        <span class="badge badge-neutral">Link indisponível · 404</span>
         <h1 id="page-title">Página não encontrada</h1>
-        <p>Este link não está disponível. Confira o endereço ou peça um novo link ao organizador.</p>
+        <p class="muted">Este link não está disponível, foi substituído ou o evento foi encerrado. Confira o endereço completo ou peça um novo link a quem organiza o grupo.</p>
         <a class="button" th:href="@{/}">Ir para o início</a>
     </section>
 </main>
 <footer th:replace="~{fragments/common :: footer}"></footer>
+<div th:replace="~{fragments/common :: scripts}"></div>
 </body>
 </html>
