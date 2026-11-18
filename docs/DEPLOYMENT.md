@@ -253,6 +253,27 @@ sudo systemctl enable --now amigo-secreto-backup.timer
 systemctl list-timers amigo-secreto-backup.timer
 ```
 
+### Cópia off-site (opcional)
+
+O dump local não protege contra perda da VPS. `scripts/backup-offsite.sh` cria um backup novo e copia
+uma versão criptografada para um remote [rclone](https://rclone.org/):
+
+```bash
+OFFSITE_REMOTE=meu-crypt:backups bash scripts/backup-offsite.sh
+```
+
+- `OFFSITE_REMOTE` aponta para um remote `crypt` (S3, B2, R2, SFTP ou outro).
+- O script confere o `sha256` do arquivo lido de volta do remote antes de considerar sucesso.
+- `OFFSITE_RETENTION_DAYS` (padrão 30) remove cópias antigas no remote.
+- Guarde a senha do remote `crypt` fora da VPS; sem ela o backup é irrecuperável.
+
+Para manter o staging atualizado sem gerar um dump extra, um timer diário pode chamar
+`OFFSITE_SKIP_BACKUP=1 bash scripts/backup-offsite.sh` depois do backup local. O download para outra
+máquina continua sendo o passo que tira a cópia da VPS.
+
+Se o destino for manual, copie o diretório de staging criptografado para outra máquina e valide a
+decriptação com a mesma chave. Uma cópia baixada manualmente só é off-site depois de sair da VPS.
+
 Boas práticas:
 
 - Mantenha uma cópia **fora da VPS** (`rclone`/`rsync`). Backup no mesmo disco não protege contra perda da máquina.
