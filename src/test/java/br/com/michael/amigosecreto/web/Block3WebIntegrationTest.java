@@ -329,6 +329,33 @@ class Block3WebIntegrationTest {
         assertThat(reloaded.getFirstViewedAt()).isNotNull();
     }
 
+    @Test
+    void participantPageShowsOwnLinkActionsAndRevealCurtainWhenDrawn() throws Exception {
+        MockHttpSession session = sessionWithCsrfToken();
+        Event event = createEventThroughForm(session);
+        String mariaToken = joinThroughInvite(session, event, "Maria", "Chocolate");
+
+        mockMvc.perform(get("/p/{accessToken}", mariaToken).session(session))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/p/" + mariaToken)))
+                .andExpect(content().string(containsString("Guarde seu link pessoal")))
+                .andExpect(content().string(not(containsString("Toque para revelar"))));
+
+        Participant organizer = participantRepository
+                .findByEvent_IdAndOrganizerTrue(event.getId())
+                .orElseThrow();
+        Participant maria = participantRepository.findByAccessToken(mariaToken).orElseThrow();
+        assignmentRepository.save(new Assignment(event, maria, organizer));
+        event.markDrawn(Instant.now());
+        eventRepository.saveAndFlush(event);
+
+        mockMvc.perform(get("/p/{accessToken}", mariaToken).session(session))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/p/" + mariaToken)))
+                .andExpect(content().string(containsString("Toque para revelar")))
+                .andExpect(content().string(containsString("data-reveal-card")));
+    }
+
     /**
      * Faz o GET inicial que cria o token CSRF na sessão e devolve a mesma
      * sessão para ser reaproveitada nos POSTs.

@@ -4,12 +4,17 @@
 <body>
 <header th:replace="~{fragments/common :: nav('')}"></header>
 <main class="container content" id="conteudo">
-    <section class="notice" aria-labelledby="page-title">
+    <section class="notice error-card" aria-labelledby="page-title">
+        <div class="error-icon-wrap error-icon-warning" aria-hidden="true">
+            <span th:replace="~{fragments/icons :: iconAlert}"></span>
+        </div>
+        <span class="badge badge-warning">Sessão expirada ou inválida · 403</span>
         <h1 id="page-title">Não foi possível validar a solicitação</h1>
-        <p>Volte à página anterior e tente novamente.</p>
+        <p class="muted">Sua sessão pode ter expirado ou o formulário ficou aberto por muito tempo. Volte à página anterior, recarregue e tente novamente.</p>
         <a class="button" th:href="@{/}">Ir para o início</a>
     </section>
 </main>
 <footer th:replace="~{fragments/common :: footer}"></footer>
+<div th:replace="~{fragments/common :: scripts}"></div>
 </body>
 </html>

@@ -5,46 +5,113 @@
 <header th:replace="~{fragments/common :: nav('')}"></header>
 
 <main class="container content" id="conteudo">
-    <section class="card">
-        <h1>Criar amigo secreto</h1>
-        <p class="muted">Sem login. Você recebe um link para o painel e outro para participar do sorteio.</p>
+    <div class="alert alert-success" role="status" th:if="${message}" th:text="${message}"></div>
 
-        <div class="alert alert-success" role="status" th:if="${message}" th:text="${message}"></div>
+    <div class="hero-split">
+        <section class="hero-pitch" aria-labelledby="hero-heading">
+            <span class="eyebrow-pill">
+                <span th:replace="~{fragments/icons :: iconSparkles}"></span>
+                <span>Sem cadastro · Privado · Gratuito</span>
+            </span>
+            <h1 id="hero-heading">Organize seu amigo secreto sem complicação.</h1>
+            <p class="hero-lead">
+                Crie o grupo em segundos, compartilhe o convite no WhatsApp e realize o sorteio em ciclo único — sem precisar de senha e sem ninguém ver quem tirou quem.
+            </p>
 
-        <form th:action="@{/events}" th:object="${form}" method="post" novalidate>
-            <div th:replace="~{fragments/common :: csrf}"></div>
+            <div class="feature-bento-list">
+                <article class="feature-tile">
+                    <div class="feature-icon" aria-hidden="true">
+                        <span th:replace="~{fragments/icons :: iconShield}"></span>
+                    </div>
+                    <div>
+                        <h2>Links exclusivos em vez de login</h2>
+                        <p class="muted">Você recebe um link para gerenciar o painel e cada participante recebe o próprio link individual.</p>
+                    </div>
+                </article>
 
-            <div class="field">
-                <label for="name">Nome do evento</label>
-                <input type="text" id="name" th:field="*{name}" maxlength="80" autocomplete="off" required>
-                <p class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></p>
+                <article class="feature-tile">
+                    <div class="feature-icon feature-icon-accent" aria-hidden="true">
+                        <span th:replace="~{fragments/icons :: iconUsers}"></span>
+                    </div>
+                    <div>
+                        <h2>Restrições inteligentes de grupo</h2>
+                        <p class="muted">Evite que casais, familiares ou pessoas do mesmo time tirem umas às outras, sempre sem trocas diretas.</p>
+                    </div>
+                </article>
+
+                <article class="feature-tile">
+                    <div class="feature-icon" aria-hidden="true">
+                        <span th:replace="~{fragments/icons :: iconMail}"></span>
+                    </div>
+                    <div>
+                        <h2>WhatsApp manual ou e-mail automático</h2>
+                        <p class="muted">Envie os links em um toque pelo WhatsApp ou deixe que os participantes informem e-mail para entrega automática.</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="card hero-form-card" aria-labelledby="form-heading">
+            <div class="card-header-stack">
+                <p class="eyebrow">Novo grupo</p>
+                <h2 id="form-heading">Criar amigo secreto</h2>
+                <p class="muted">Você já entra automaticamente na lista como participante.</p>
             </div>
 
-            <div class="field">
-                <label for="eventDate">Data do evento <span class="muted">(opcional)</span></label>
-                <div class="date-input-wrap">
-                    <input type="date" id="eventDate" th:field="*{eventDate}">
-                    <input type="date" class="date-picker-trigger" tabindex="-1" aria-hidden="true"
-                           data-date-trigger-for="eventDate" autocomplete="off">
+            <div class="alert alert-error" role="alert" data-validation-summary
+                 th:if="${#fields.hasErrors('form.*')}">
+                <strong>Confira os campos destacados abaixo</strong> antes de criar o evento.
+            </div>
+
+            <form th:action="@{/events}" th:object="${form}" method="post" novalidate>
+                <div th:replace="~{fragments/common :: csrf}"></div>
+
+                <div class="field">
+                    <label for="name">Nome do evento</label>
+                    <input type="text" id="name" th:field="*{name}" maxlength="80"
+                           placeholder="Ex.: Confraternização do Time"
+                           autocomplete="off" required
+                           th:attr="aria-invalid=${#fields.hasErrors('name') ? 'true' : null},aria-describedby=${#fields.hasErrors('name') ? 'event-name-error' : null}">
+                    <p class="field-error" id="event-name-error"
+                       th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></p>
                 </div>
-                <p class="field-error" th:if="${#fields.hasErrors('eventDate')}" th:errors="*{eventDate}"></p>
-            </div>
 
-            <div class="field">
-                <label for="suggestedValue">Valor sugerido <span class="muted">(opcional)</span></label>
-                <input type="number" id="suggestedValue" th:field="*{suggestedValue}" min="0" step="0.01" inputmode="decimal">
-                <p class="field-error" th:if="${#fields.hasErrors('suggestedValue')}" th:errors="*{suggestedValue}"></p>
-            </div>
+                <div class="field-grid-2">
+                    <div class="field">
+                        <label for="eventDate">Data do evento <span class="optional-tag">opcional</span></label>
+                        <input type="date" id="eventDate" th:field="*{eventDate}"
+                               th:attr="aria-invalid=${#fields.hasErrors('eventDate') ? 'true' : null},aria-describedby=${#fields.hasErrors('eventDate') ? 'event-date-error' : null}">
+                        <p class="field-error" id="event-date-error"
+                           th:if="${#fields.hasErrors('eventDate')}" th:errors="*{eventDate}"></p>
+                    </div>
 
-            <div class="field">
-                <label for="organizerName">Seu nome (organizador)</label>
-                <input type="text" id="organizerName" th:field="*{organizerName}" maxlength="80" autocomplete="name" required>
-                <p class="field-error" th:if="${#fields.hasErrors('organizerName')}" th:errors="*{organizerName}"></p>
-            </div>
+                    <div class="field">
+                        <label for="suggestedValue">Valor sugerido <span class="optional-tag">opcional</span></label>
+                        <div class="input-prefix-wrap">
+                            <span class="input-prefix" aria-hidden="true">R$</span>
+                            <input type="number" id="suggestedValue" th:field="*{suggestedValue}"
+                                   min="0" step="0.01" inputmode="decimal" placeholder="50,00"
+                                   th:attr="aria-invalid=${#fields.hasErrors('suggestedValue') ? 'true' : null},aria-describedby=${#fields.hasErrors('suggestedValue') ? 'event-value-error' : null}">
+                        </div>
+                        <p class="field-error" id="event-value-error"
+                           th:if="${#fields.hasErrors('suggestedValue')}" th:errors="*{suggestedValue}"></p>
+                    </div>
+                </div>
 
-            <button class="button" type="submit">Criar evento</button>
-        </form>
-    </section>
+                <div class="field">
+                    <label for="organizerName">Seu nome (organizador)</label>
+                    <input type="text" id="organizerName" th:field="*{organizerName}" maxlength="80"
+                           placeholder="Como o grupo conhece você" autocomplete="name" required
+                           th:attr="aria-invalid=${#fields.hasErrors('organizerName') ? 'true' : null},aria-describedby=${#fields.hasErrors('organizerName') ? 'organizer-name-error' : null}">
+                    <p class="field-error" id="organizer-name-error"
+                       th:if="${#fields.hasErrors('organizerName')}" th:errors="*{organizerName}"></p>
+                </div>
+
+                <button class="button button-lg button-block" type="submit">Criar evento</button>
+                <p class="form-footnote muted">Na próxima tela você poderá copiar, baixar ou enviar seus links por e&#8209;mail.</p>
+            </form>
+        </section>
+    </div>
 </main>
 
 <footer th:replace="~{fragments/common :: footer}"></footer>
