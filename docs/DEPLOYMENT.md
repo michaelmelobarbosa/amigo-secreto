@@ -253,23 +253,31 @@ sudo systemctl enable --now amigo-secreto-backup.timer
 systemctl list-timers amigo-secreto-backup.timer
 ```
 
-### Cópia off-site (opcional)
+### Cópia off-site
 
-O dump local não protege contra perda da VPS. `scripts/backup-offsite.sh` cria um backup novo e copia
-uma versão criptografada para um remote [rclone](https://rclone.org/):
+O dump local não protege contra perda da VPS. `scripts/backup-offsite.sh` publica o backup
+criptografado em **dois** remotes [rclone](https://rclone.org/):
 
 ```bash
-OFFSITE_REMOTE=meu-crypt:backups bash scripts/backup-offsite.sh
+bash scripts/backup-offsite.sh              # gera dump novo e publica
+OFFSITE_SKIP_BACKUP=1 bash scripts/backup-offsite.sh   # publica o dump mais recente
 ```
 
-- `OFFSITE_REMOTE` aponta para um remote `crypt` (S3, B2, R2, SFTP ou outro).
-- O script confere o `sha256` do arquivo lido de volta do remote antes de considerar sucesso.
-- `OFFSITE_RETENTION_DAYS` (padrão 30) remove cópias antigas no remote.
-- Guarde a senha do remote `crypt` fora da VPS; sem ela o backup é irrecuperável.
+1. **Staging local** (`offsite-crypt`): diretório na própria VPS; origem do pull de outra máquina.
+2. **Remote 24/7** (`offsite-r2`): object storage S3-compatible (ex.: Cloudflare R2, B2, S3); a cópia
+   sai da VPS minutos após o backup, sem depender de outro computador ligado.
 
-Para manter o staging atualizado sem gerar um dump extra, um timer diário pode chamar
-`OFFSITE_SKIP_BACKUP=1 bash scripts/backup-offsite.sh` depois do backup local. O download para outra
-máquina continua sendo o passo que tira a cópia da VPS.
+Regras do script:
+
+- Confere o `sha256` lendo cada arquivo de volta antes de considerar sucesso.
+- `OFFSITE_RETENTION_DAYS` (padrão 30) remove cópias antigas nos dois remotes.
+- `OFFSITE_SIZE_LIMIT_BYTES` (padrão 2 GB) falha o job se o remote 24/7 passar do teto — protege
+  contra runaway antes de estourar o plano grátis.
+- `OFFSITE_HEARTBEAT_FILE` (padrão `~/.config/amigo-secreto/heartbeat-url`) faz um ping de sucesso
+  para um dead-man's switch (ex.: healthchecks.io); sem ping, o serviço externo alerta.
+
+Guarde a senha do remote `crypt` fora da VPS; sem ela o backup é irrecuperável. Um timer diário pode
+rodar o script logo após o backup local.
 
 Se o destino for manual, copie o diretório de staging criptografado para outra máquina e valide a
 decriptação com a mesma chave. Uma cópia baixada manualmente só é off-site depois de sair da VPS.
