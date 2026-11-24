@@ -345,7 +345,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 4. Backup periódico do volume do Postgres (`pg_dump` agendado). Na VPS atual, que **não tem `cron`**, o agendamento é um **systemd timer** (`amigo-secreto-backup.timer`, 03:15, retenção 14 dias).
 5. Endpoint de saúde (`/actuator/health`), se adicionar o Actuator, usado pelo healthcheck do Compose.
 6. Domínio e HTTPS **em produção desde 2026-11-15**: app em `amigo-secreto.barbosalabs.dev` e envio em `mail.barbosalabs.dev`, com DKIM/DMARC. A VPS não tem IPv6 global, então só há registro A.
-7. Atrás do proxy, configurar `server.forward-headers-strategy=framework` para que os links absolutos saiam com o host e o esquema (`https`) corretos.
+7. Atrás do proxy, configurar `server.forward-headers-strategy=native` (lendo apenas `X-Forwarded-For` e `X-Forwarded-Proto` de proxies internos) para que o esquema (`https`) e o IP real funcionem sem confiar em `Forwarded`, `X-Forwarded-Host` ou `X-Forwarded-Prefix`.
 
 ## 11. Fora do MVP (backlog local)
 
