@@ -186,7 +186,12 @@ spring:
   flyway:
     enabled: true
 server:
-  forward-headers-strategy: framework
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      remote-ip-header: x-forwarded-for
+      protocol-header: x-forwarded-proto
+      host-header: ""
   error:
     include-message: never
     include-stacktrace: never
