@@ -96,9 +96,9 @@ Decisões:
 
 ### IP real atrás do proxy
 
-O filtro precisa rodar **depois** do `ForwardedHeaderFilter` e o Caddy precisa sobrescrever `X-Forwarded-For` com o IP do cliente. Se o app enxergar o IP do proxy, todos caem no mesmo balde; se confiar em header arbitrário, o limite é contornável.
+A aplicação usa `server.forward-headers-strategy: native` com o `RemoteIpValve` do Tomcat lendo apenas `X-Forwarded-For` e `X-Forwarded-Proto` vindos de proxies internos confiáveis (ignorando `Forwarded`, `X-Forwarded-Host` e `X-Forwarded-Prefix`), enquanto o Caddy sobrescreve `X-Forwarded-For`/`X-Forwarded-Proto` e remove `Forwarded` e `X-Forwarded-Prefix` do cliente. Se o app enxergar o IP do proxy, todos caem no mesmo balde; se confiar em header arbitrário, o limite é contornável.
 
-O app não publica porta: só o Caddy da rede `edge` o alcança. Teste com um `X-Forwarded-For` forjado e confirme que o balde não muda.
+O app não publica porta: só o Caddy da rede `edge` o alcança. Teste com `X-Forwarded-For`, `Forwarded`, `X-Forwarded-Host` e `X-Forwarded-Prefix` forjados e confirme que o balde e o `Location` dos redirects não mudam.
 
 ### Limitações
 

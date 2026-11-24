@@ -374,7 +374,10 @@ amigo-secreto.barbosalabs.dev {
     @actuator path /actuator /actuator/*
     respond @actuator 404
 
-    reverse_proxy amigo-app:8080
+    reverse_proxy amigo-app:8080 {
+        header_up -Forwarded
+        header_up -X-Forwarded-Prefix
+    }
 
     header {
         -Server
@@ -384,6 +387,8 @@ amigo-secreto.barbosalabs.dev {
     # SEM "log": as URLs carregam tokens de acesso no path.
 }
 ```
+
+O `reverse_proxy` remove `Forwarded` (RFC 7239) e `X-Forwarded-Prefix` vindos do cliente para que não passem para a app, atuando em conjunto com `server.forward-headers-strategy: native` (que lê apenas `X-Forwarded-For` e `X-Forwarded-Proto` de proxies internos).
 
 Na prática, o arquivo usa o **hostname literal** em vez de `{$DOMAIN}`: um `.env` por stack não comporta vários domínios. Nova aplicação = novo arquivo em `sites/` + reload.
 

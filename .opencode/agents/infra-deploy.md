@@ -51,7 +51,7 @@ Manter Java 25 e Spring Boot 4.1.2. Nada de dependência "por conveniência".
 
 - Dockerfile multi-stage (build com Maven/JDK 25, runtime JRE enxuto), usuário não-root, `HEALTHCHECK` em `/actuator/health`, `-XX:MaxRAMPercentage` em vez de `-Xmx` fixo.
 - Compose com app + Postgres, volume nomeado, `depends_on` com healthcheck real, variáveis via `.env` (nunca segredo comitado) e `.env.example` documentado.
-- Produção: proxy com TLS, `APP_BASE_URL` correto (sem barra final), `forward-headers-strategy=framework`, actuator exposto só no health e só na rede interna.
+- Produção: proxy com TLS, `APP_BASE_URL` correto (sem barra final), `forward-headers-strategy=native` (apenas `X-Forwarded-For` e `X-Forwarded-Proto`, sem `Forwarded` nem `X-Forwarded-Host`/`X-Forwarded-Prefix`), actuator exposto só no health e só na rede interna.
 - Backup: `pg_dump` documentado com retenção e teste de restore. Deploy só depois de `.\mvnw.cmd test` verde e Flyway aplicando do zero em banco vazio.
 - `robots.txt` bloqueando tudo; verifique que o proxy não adiciona cache.
 

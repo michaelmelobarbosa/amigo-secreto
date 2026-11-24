@@ -130,6 +130,17 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void nonIpLiteralsWithColonDoNotFailOrShareBucket() throws Exception {
+        RateLimitFilter filter = filter(properties(true, 1, 30, 10, 30));
+
+        assertThat(RateLimitFilter.normalizeIp("evil.invalid:80")).isEqualTo("evil.invalid:80");
+        assertThat(RateLimitFilter.normalizeIp("[nao-e-ip]")).isEqualTo("nao-e-ip");
+        assertThat(call(filter, "POST", "/events", "evil.invalid:80").passed()).isTrue();
+        assertThat(call(filter, "POST", "/events", "evil.invalid:80").passed()).isFalse();
+        assertThat(call(filter, "POST", "/events", "other.invalid:80").passed()).isTrue();
+    }
+
+    @Test
     void keepsMapBoundedByEvictingLeastRecentlyUsedEntry() throws Exception {
         RateLimitFilter filter = filter(properties(true, 1, 30, 10, 30, 2));
 

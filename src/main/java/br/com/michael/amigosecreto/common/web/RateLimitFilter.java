@@ -7,7 +7,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -25,9 +24,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * Rate limiting em memória, por IP e categoria de rota (ver
  * {@code docs/SECURITY.md}).
  *
- * <p>Roda depois do {@code ForwardedHeaderFilter} (que o Spring Boot registra em
- * {@link Ordered#HIGHEST_PRECEDENCE}), então {@link HttpServletRequest#getRemoteAddr()}
- * já contém o IP real do cliente que o Caddy encaminhou. O IP nunca é persistido
+ * <p>Roda depois do {@code RemoteIpValve} do Tomcat ({@code server.forward-headers-strategy=native}),
+ * então {@link HttpServletRequest#getRemoteAddr()} já contém o IP real do cliente
+ * que o Caddy encaminhou em {@code X-Forwarded-For} (ignorando {@code Forwarded},
+ * {@code X-Forwarded-Host} e {@code X-Forwarded-Prefix}). O IP nunca é persistido
  * nem registrado em log: existe apenas como chave do mapa em memória.
  *
  * <p>Janela fixa com contador por chave; o mapa é um LRU limitado por
@@ -232,7 +232,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         try {
-            byte[] address = InetAddress.getByName(lower).getAddress();
+            byte[] address = InetAddress.ofLiteral(lower).getAddress();
             if (address.length == 4) {
                 return dotted(address);
             }
@@ -246,8 +246,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 }
                 return prefix.toString();
             }
-        } catch (UnknownHostException ignored) {
-            // Valor que não é um literal de IP: usa como veio para não abrir o balde.
+        } catch (IllegalArgumentException ignored) {
+            // Valor que não é um literal de IP: usa como veio sem consultar DNS.
         }
 
         return lower;
