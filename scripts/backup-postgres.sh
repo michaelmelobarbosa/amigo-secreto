@@ -17,12 +17,24 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd -- "$script_dir/.." && pwd)"
 cd "$project_dir"
 
-# Carrega POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD do .env, se existir.
+load_env_var() {
+    local key="$1"
+    local line value
+    line="$(sed '1s/^\xEF\xBB\xBF//' .env | tr -d '\r' | grep -E "^[[:space:]]*${key}=" | tail -n 1 || true)"
+    [[ -z "$line" ]] && return 0
+    value="${line#*=}"
+    if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+        value="${value:1:${#value}-2}"
+    elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+        value="${value:1:${#value}-2}"
+    fi
+    printf '%s' "$value"
+}
+
+# Carrega apenas POSTGRES_DB e POSTGRES_USER do .env sem executar shell arbitrário.
 if [[ -f .env ]]; then
-    set -a
-    # shellcheck disable=SC1091
-    source .env
-    set +a
+    : "${POSTGRES_DB:=$(load_env_var POSTGRES_DB)}"
+    : "${POSTGRES_USER:=$(load_env_var POSTGRES_USER)}"
 fi
 
 : "${POSTGRES_DB:?defina POSTGRES_DB no .env}"

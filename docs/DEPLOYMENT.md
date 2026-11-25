@@ -457,6 +457,7 @@ sudo docker system df
 - **HTTPS obrigatório.** A app nunca é publicada em HTTP.
 - **Tokens nas URLs.** Não habilite access log no proxy nem log de requisição: o token está no path. Se precisar de telemetria, redija a URI inteira (`request>uri delete`).
 - **Sem porta publicada** em `app`/`db`; o banco fica em rede privada.
+- **Containers endurecidos:** `app` roda com usuário não-root, `read_only: true`, `tmpfs` em `/tmp`, `cap_drop: [ALL]` e `no-new-privileges:true`; `db` também usa `no-new-privileges:true`.
 - **Rate limiting** em memória por IP; detalhes em [SECURITY.md](SECURITY.md).
 - **HSTS com `includeSubDomains`** está ativo: subdomínios do host ficam presos em HTTPS.
 - **`db` limitado** (`mem_limit: 512m`, `cpus: "0.5"`); a app usa `1g`/`1.0`.

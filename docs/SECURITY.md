@@ -46,7 +46,7 @@ O painel nunca recebe `Assignment`. A página do participante recebe apenas o pr
 
 ## Headers, cache e indexação
 
-Todas as respostas (incluindo arquivos estáticos) recebem `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY`. Rotas dinâmicas recebem adicionalmente:
+Todas as respostas (incluindo arquivos estáticos) recebem `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e `Permissions-Policy: camera=(), microphone=(), geolocation=()`. Rotas dinâmicas recebem adicionalmente:
 
 - `Cache-Control: no-store` e `Pragma: no-cache`;
 - `Content-Security-Policy` restritiva (`script-src 'self'`, `frame-ancestors 'none'`);
