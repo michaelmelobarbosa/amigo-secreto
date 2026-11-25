@@ -30,6 +30,9 @@ public class ExclusionGroupService {
     /** Mínimo de membros para que o grupo proíba algum par. */
     public static final int MIN_MEMBERS = 2;
 
+    /** Teto de grupos de exclusão por evento para limitar carga e busca. */
+    public static final int MAX_GROUPS_PER_EVENT = 50;
+
     private static final String EVENT_NOT_FOUND = "Evento não encontrado.";
     private static final String GROUP_NOT_FOUND = "Grupo não encontrado.";
     private static final String TOO_FEW_MEMBERS =
@@ -60,6 +63,10 @@ public class ExclusionGroupService {
         if (!locked.isOpen()) {
             throw new RuleViolationException(
                     "Grupos de exclusão só podem ser criados antes do sorteio.");
+        }
+        if (exclusionGroupRepository.countByEvent_Id(locked.getId()) >= MAX_GROUPS_PER_EVENT) {
+            throw new RuleViolationException(
+                    "O evento já atingiu o limite de " + MAX_GROUPS_PER_EVENT + " grupos de exclusão.");
         }
 
         Set<UUID> selected = memberIds(memberIds);

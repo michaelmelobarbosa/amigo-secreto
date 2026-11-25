@@ -232,6 +232,19 @@ class CycleDrawSolverTest {
     }
 
     @Test
+    void abortsWhenTimeBudgetExpires() {
+        List<UUID> participants = people(10);
+        CycleDrawSolver solver = new CycleDrawSolver(
+                new Random(1), CycleDrawSolver.DEFAULT_STEP_BUDGET, java.time.Duration.ofNanos(1));
+
+        DrawImpossibleException error = assertThrows(
+                DrawImpossibleException.class,
+                () -> solver.draw(participants, Map.of()));
+
+        assertEquals(DrawImpossibleException.Reason.SEARCH_LIMIT_EXCEEDED, error.getReason());
+    }
+
+    @Test
     void treatsForbiddenPairsAsSymmetric() {
         List<UUID> participants = people(4);
         Map<UUID, Set<UUID>> onlyOneDirection = Map.of(id(1), Set.of(id(2)));

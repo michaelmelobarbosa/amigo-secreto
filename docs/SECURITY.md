@@ -37,7 +37,9 @@ O painel nunca recebe `Assignment`. A página do participante recebe apenas o pr
 ## CSRF e sessão
 
 - Não há Spring Security. O CSRF é próprio, com token de sessão e comparação em tempo constante.
-- Todo POST valida o token, inclusive remoções e ações “inofensivas”.
+- Todo POST valida o token, inclusive remoções e ações “inofensivas”, e rejeita `_csrf` enviado na query string.
+- A sessão só é criada em respostas `GET` de páginas com formulário (`404`, `HEAD`, downloads e estáticos não alocam sessão).
+- O gerenciador de sessão do Tomcat limita o total em memória (`maxActiveSessions = 5000`) com timeout de `30m`.
 - Cookie `HttpOnly`, `SameSite=Lax` e `Secure` fora do perfil `dev`.
 - `server.servlet.session.tracking-modes: cookie` remove o `;jsessionid` da URL.
 - O perfil `dev` desativa `Secure` apenas para HTTP local.
@@ -108,6 +110,7 @@ O app não publica porta: só o Caddy da rede `edge` o alcança. Teste com `X-Fo
 - NAT compartilhado divide o balde; por isso os limites são altos.
 - Não impede alguém com o convite de preencher vagas lentamente; para isso valem remover participante e regenerar o convite.
 - O teto diário interno de e-mails (`EMAIL_DAILY_LIMIT=250` global e `EMAIL_EVENT_DAILY_LIMIT=100` por evento em UTC) protege a cota gratuita do Brevo (300/dia), mas o contador de envios avulsos do painel fica em memória.
+- Cada evento tem teto de `50` grupos de exclusão e o algoritmo de sorteio possui orçamento de `1.000.000` passos e deadline de `2s` para evitar contenção prolongada de CPU/lock.
 - Redis, WAF, captcha e limite por conta ficam fora desta versão.
 
 ## E-mail e privacidade

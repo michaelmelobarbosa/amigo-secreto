@@ -19,6 +19,8 @@ import br.com.michael.amigosecreto.event.EventRepository;
 import br.com.michael.amigosecreto.event.EventStatus;
 import br.com.michael.amigosecreto.participant.Participant;
 import br.com.michael.amigosecreto.participant.ParticipantRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -59,6 +61,9 @@ class NotificationServiceTest {
 
     @MockitoBean
     private EmailSender emailSender;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private final PlatformTransactionManager transactionManager;
 
@@ -319,6 +324,23 @@ class NotificationServiceTest {
         assertThat(notificationRepository.findByParticipant_IdAndDrawCountAndChannel(
                         ana.getId(), 1, NotificationChannel.EMAIL))
                 .isEmpty();
+    }
+
+    @Test
+    void resendReloadsEventStateFromDatabaseAndRejectsReopenedEvent() {
+        Event staleDrawnEvent = createDrawnEvent("notif_resend_stale", 1);
+        Participant ana = addParticipant(
+                staleDrawnEvent, "Ana", "ana@example.com", "notif_resend_stale_ana");
+        entityManager.flush();
+        entityManager.detach(staleDrawnEvent);
+
+        Event reopened = eventRepository.findById(staleDrawnEvent.getId()).orElseThrow();
+        reopened.reopen();
+        eventRepository.saveAndFlush(reopened);
+
+        assertThatThrownBy(() -> notificationService.resendForParticipant(staleDrawnEvent, ana.getId()))
+                .isInstanceOf(RuleViolationException.class)
+                .hasMessage("O sorteio ainda não foi realizado.");
     }
 
     // ---------- statuses ----------

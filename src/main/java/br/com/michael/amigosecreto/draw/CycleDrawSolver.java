@@ -1,5 +1,6 @@
 package br.com.michael.amigosecreto.draw;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -24,20 +25,30 @@ import java.util.random.RandomGenerator;
 public final class CycleDrawSolver {
 
     public static final int DEFAULT_STEP_BUDGET = 1_000_000;
+    public static final Duration DEFAULT_TIME_BUDGET = Duration.ofSeconds(2);
 
     private final RandomGenerator random;
     private final int stepBudget;
+    private final Duration timeBudget;
 
     public CycleDrawSolver(RandomGenerator random) {
-        this(random, DEFAULT_STEP_BUDGET);
+        this(random, DEFAULT_STEP_BUDGET, DEFAULT_TIME_BUDGET);
     }
 
     public CycleDrawSolver(RandomGenerator random, int stepBudget) {
+        this(random, stepBudget, DEFAULT_TIME_BUDGET);
+    }
+
+    public CycleDrawSolver(RandomGenerator random, int stepBudget, Duration timeBudget) {
         this.random = Objects.requireNonNull(random, "random");
         if (stepBudget <= 0) {
             throw new IllegalArgumentException("stepBudget deve ser positivo");
         }
+        if (timeBudget == null || timeBudget.isZero() || timeBudget.isNegative()) {
+            throw new IllegalArgumentException("timeBudget deve ser positivo");
+        }
         this.stepBudget = stepBudget;
+        this.timeBudget = timeBudget;
     }
 
     /**
@@ -64,9 +75,11 @@ public final class CycleDrawSolver {
 
         Map<UUID, UUID> assignment = new LinkedHashMap<>();
         int[] steps = new int[1];
+        boolean[] timedOut = new boolean[1];
+        long deadlineNanos = System.nanoTime() + timeBudget.toNanos();
 
-        if (!search(start, start, people, allowed, visited, assignment, steps)) {
-            if (steps[0] > stepBudget) {
+        if (!search(start, start, people, allowed, visited, assignment, steps, timedOut, deadlineNanos)) {
+            if (steps[0] > stepBudget || timedOut[0]) {
                 throw new DrawImpossibleException(
                         DrawImpossibleException.Reason.SEARCH_LIMIT_EXCEEDED,
                         "Não foi possível encontrar um sorteio dentro do limite de busca. "
@@ -142,13 +155,20 @@ public final class CycleDrawSolver {
             Map<UUID, List<UUID>> allowed,
             Set<UUID> visited,
             Map<UUID, UUID> assignment,
-            int[] steps) {
+            int[] steps,
+            boolean[] timedOut,
+            long deadlineNanos) {
 
         if (visited.size() == people.size()) {
             if (allowed.get(current).contains(start)) {
                 assignment.put(current, start);
                 return true;
             }
+            return false;
+        }
+
+        if (System.nanoTime() > deadlineNanos) {
+            timedOut[0] = true;
             return false;
         }
 
@@ -161,13 +181,22 @@ public final class CycleDrawSolver {
             if (++steps[0] > stepBudget) {
                 return false;
             }
+            if ((steps[0] & 0x3FF) == 0 && System.nanoTime() > deadlineNanos) {
+                timedOut[0] = true;
+                return false;
+            }
 
             assignment.put(current, candidate);
             visited.add(candidate);
 
             if (!hasDeadEnd(people, allowed, visited, start)
-                    && search(candidate, start, people, allowed, visited, assignment, steps)) {
+                    && search(candidate, start, people, allowed, visited, assignment, steps, timedOut, deadlineNanos)) {
                 return true;
+            }
+            if (timedOut[0] || steps[0] > stepBudget) {
+                visited.remove(candidate);
+                assignment.remove(current);
+                return false;
             }
 
             visited.remove(candidate);
