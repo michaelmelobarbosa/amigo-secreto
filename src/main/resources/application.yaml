@@ -8,6 +8,7 @@ app:
     wishlist-per-window: ${RATE_LIMIT_WISHLIST:30}
     email-links-per-window: ${RATE_LIMIT_EMAIL_LINKS:10}
     email-resend-per-window: ${RATE_LIMIT_EMAIL_RESEND:20}
+    admin-write-per-window: ${RATE_LIMIT_ADMIN_WRITE:40}
     window: ${RATE_LIMIT_WINDOW:PT10M}
     draw-window: ${RATE_LIMIT_DRAW_WINDOW:PT1H}
     email-window: ${RATE_LIMIT_EMAIL_WINDOW:PT1H}
@@ -19,6 +20,8 @@ app:
     reply-to: ${BREVO_REPLY_TO:}
     worker-enabled: ${EMAIL_WORKER_ENABLED:true}
     worker-delay: ${EMAIL_WORKER_DELAY:30000}
+    daily-limit: ${EMAIL_DAILY_LIMIT:250}
+    event-daily-limit: ${EMAIL_EVENT_DAILY_LIMIT:100}
     brevo:
       api-key: ${BREVO_API_KEY:}
       sandbox: ${BREVO_SANDBOX:true}

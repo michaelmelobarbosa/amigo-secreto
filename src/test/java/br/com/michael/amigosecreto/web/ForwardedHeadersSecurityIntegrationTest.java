@@ -126,6 +126,56 @@ class ForwardedHeadersSecurityIntegrationTest {
         }
     }
 
+    @Test
+    void matrixParamsAndEncodedPathDoNotBypassRateLimitOrPrivacyHeadersInTomcat() throws Exception {
+        HttpClient client = newClient();
+        String csrf = fetchCsrf(client);
+        List<String> createdAdminTokens = new ArrayList<>();
+
+        try {
+            HttpResponse<String> first = postToPath(
+                    client,
+                    "/events",
+                    csrf,
+                    "Evento Path Norm",
+                    "Org",
+                    "X-Forwarded-For", "203.0.113.70");
+            assertThat(first.statusCode()).isEqualTo(302);
+            String adminToken = extractAdminToken(first.headers().firstValue("Location").orElse(""));
+            createdAdminTokens.add(adminToken);
+
+            HttpResponse<String> matrixPost = postToPath(
+                    client,
+                    "/events;x=1",
+                    csrf,
+                    "Evento Bypass Matrix",
+                    "Org",
+                    "X-Forwarded-For", "203.0.113.70");
+            assertThat(matrixPost.statusCode()).isEqualTo(429);
+
+            HttpResponse<String> encodedPost = postToPath(
+                    client,
+                    "/%65vents",
+                    csrf,
+                    "Evento Bypass Encoded",
+                    "Org",
+                    "X-Forwarded-For", "203.0.113.70");
+            assertThat(encodedPost.statusCode()).isEqualTo(429);
+
+            HttpRequest adminGet = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + "/admin;x=1/" + adminToken))
+                    .GET()
+                    .build();
+            HttpResponse<String> adminResponse = client.send(adminGet, HttpResponse.BodyHandlers.ofString());
+            assertThat(adminResponse.statusCode()).isEqualTo(200);
+            assertThat(adminResponse.headers().firstValue("Cache-Control")).contains("no-store");
+            assertThat(adminResponse.headers().firstValue("Referrer-Policy")).contains("no-referrer");
+            assertThat(adminResponse.headers().firstValue("X-Robots-Tag")).contains("noindex, nofollow");
+        } finally {
+            deleteEvents(client, csrf, createdAdminTokens);
+        }
+    }
+
     private HttpClient newClient() {
         return HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER)
@@ -152,12 +202,23 @@ class ForwardedHeadersSecurityIntegrationTest {
             String organizerName,
             String... headers)
             throws Exception {
+        return postToPath(client, "/events", csrf, name, organizerName, headers);
+    }
+
+    private HttpResponse<String> postToPath(
+            HttpClient client,
+            String path,
+            String csrf,
+            String name,
+            String organizerName,
+            String... headers)
+            throws Exception {
         String body = "_csrf=" + encode(csrf)
                 + "&name=" + encode(name)
                 + "&organizerName=" + encode(organizerName);
 
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/events"))
+                .uri(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
         for (int i = 0; i < headers.length; i += 2) {

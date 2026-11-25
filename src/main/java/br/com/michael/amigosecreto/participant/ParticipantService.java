@@ -211,9 +211,15 @@ public class ParticipantService {
     }
 
     private Participant persist(Event event, String name, String email, String wishlist) {
+        String normalizedEmail = normalizeEmail(email);
+        if (normalizedEmail != null
+                && participantRepository.existsByEvent_IdAndEmail(event.getId(), normalizedEmail)) {
+            throw new RuleViolationException(
+                    "Já existe um participante com este e-mail neste evento.");
+        }
         Participant participant =
                 new Participant(event, name, tokenGenerator.accessToken(), false);
-        participant.setEmail(normalizeEmail(email));
+        participant.setEmail(normalizedEmail);
         participant.setWishlist(normalize(wishlist));
         return participantRepository.save(participant);
     }

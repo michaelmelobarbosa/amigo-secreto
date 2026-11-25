@@ -113,12 +113,14 @@ Não há `Retry-After`; leia `x-sib-ratelimit-limit`, `x-sib-ratelimit-remaining
 app:
   email:
     enabled: ${EMAIL_ENABLED:false}
+    daily-limit: ${EMAIL_DAILY_LIMIT:250}
+    event-daily-limit: ${EMAIL_EVENT_DAILY_LIMIT:100}
     brevo:
       api-key: ${BREVO_API_KEY:}
       from-email: ${BREVO_FROM_EMAIL:no-reply@mail.barbosalabs.dev}
       from-name: ${BREVO_FROM_NAME:Amigo Secreto}
       reply-to: ${BREVO_REPLY_TO:}
-      sandbox: ${BREVO_SANDBOX:false}
+      sandbox: ${BREVO_SANDBOX:true}
 ```
 
 - `enabled=false` usa um sender de log; nada sai do servidor.
@@ -146,7 +148,8 @@ public record EmailSendResult(
 ### Listener e worker
 
 - O listener roda após o commit e grava o outbox em transação nova.
-- O worker (`@Scheduled(fixedDelay = 30_000)`) busca `PENDING`/`FAILED` com `attempts < 3`, marca `SENDING`, chama a API e grava `SENT` ou `FAILED`.
+- O worker (`@Scheduled(fixedDelay = 30_000)`) busca `PENDING`/`FAILED` com `attempts < 3`, verifica a cota diária (`EmailQuotaGuard`: `250/dia` global e `100/dia` por evento em UTC), chama a API e grava `SENT` ou `FAILED`.
+- Se o teto diário interno for atingido, `EmailQuotaGuard` bloqueia o disparo (outbox ou links do organizador) antes de chamar o provedor, sem retentativas em loop.
 - Retry: 429 espera o reset; 5xx/rede usa backoff; 400 de payload e 401 não retentam.
 - `duplicate_parameter` com idempotência é tratado como enviado.
 - Refazer o sorteio cria novo `drawCount` e novas notificações.
@@ -238,7 +241,7 @@ Com sandbox ligado, a tela avisa que nada foi entregue; não trate como sucesso 
 ## Fora do escopo
 
 - Double opt-in e verificação de endereço.
-- Dedupe por e-mail (hoje é melhor esforço e não bloqueia).
+- Dedupe global entre eventos diferentes (dentro do mesmo evento, e-mail repetido já é rejeitado).
 - Webhooks de delivered/bounce.
 - Envio de convite por e-mail e e-mail marketing.
 - WhatsApp/SMS como canal automatizado.

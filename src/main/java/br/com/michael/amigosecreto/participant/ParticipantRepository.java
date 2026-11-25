@@ -20,6 +20,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     long countByEvent_Id(UUID eventId);
 
+    boolean existsByEvent_IdAndEmail(UUID eventId, String email);
+
     List<Participant> findByEvent_Id(UUID eventId);
 
     @Query("""

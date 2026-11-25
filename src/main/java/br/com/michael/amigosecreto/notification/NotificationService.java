@@ -13,8 +13,11 @@ import br.com.michael.amigosecreto.event.EventRepository;
 import br.com.michael.amigosecreto.event.EventStatus;
 import br.com.michael.amigosecreto.participant.Participant;
 import br.com.michael.amigosecreto.participant.ParticipantRepository;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -35,18 +38,21 @@ public class NotificationService {
     private final EventRepository eventRepository;
     private final EmailSender emailSender;
     private final EmailContentBuilder contentBuilder;
+    private final EmailQuotaGuard emailQuotaGuard;
 
     public NotificationService(
             NotificationRepository notificationRepository,
             ParticipantRepository participantRepository,
             EventRepository eventRepository,
             EmailSender emailSender,
-            EmailContentBuilder contentBuilder) {
+            EmailContentBuilder contentBuilder,
+            EmailQuotaGuard emailQuotaGuard) {
         this.notificationRepository = notificationRepository;
         this.participantRepository = participantRepository;
         this.eventRepository = eventRepository;
         this.emailSender = emailSender;
         this.contentBuilder = contentBuilder;
+        this.emailQuotaGuard = emailQuotaGuard;
     }
 
     /**
@@ -63,8 +69,13 @@ public class NotificationService {
         }
 
         List<Participant> participants = participantRepository.findByEvent_Id(event.getId());
+        Set<String> seenEmails = new HashSet<>();
         for (Participant participant : participants) {
             if (!hasEmail(participant.getEmail())) {
+                continue;
+            }
+            String normalizedEmail = participant.getEmail().trim().toLowerCase(Locale.ROOT);
+            if (!seenEmails.add(normalizedEmail)) {
                 continue;
             }
             if (notificationRepository.existsByParticipant_IdAndDrawCountAndChannel(
@@ -151,6 +162,10 @@ public class NotificationService {
         if (event.getStatus() != EventStatus.DRAWN
                 || event.getDrawCount() != notification.getDrawCount()) {
             notification.markSkipped("O sorteio não corresponde mais a este aviso.");
+            return;
+        }
+        if (!emailQuotaGuard.allowSend(event.getId())) {
+            notification.markFailed("Limite diário de envio de e-mails atingido.", false);
             return;
         }
 
