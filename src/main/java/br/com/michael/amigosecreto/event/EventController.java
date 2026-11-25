@@ -43,6 +43,7 @@ public class EventController {
                 form.organizerName()));
 
         redirectAttributes.addFlashAttribute("created", true);
-        return "redirect:/admin/" + event.getAdminToken();
+        redirectAttributes.addAttribute("adminToken", event.getAdminToken());
+        return "redirect:/admin/{adminToken}";
     }
 }

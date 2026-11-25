@@ -34,9 +34,11 @@ for cmd in curl sed grep mktemp; do
 done
 
 work_dir="$(mktemp -d)"
+chmod 700 "$work_dir"
 jar="$work_dir/cookies.txt"
 headers="$work_dir/headers.txt"
 page="$work_dir/page.html"
+curl_conf="$work_dir/curl.conf"
 event_name="Smoke e-mail $(date +%Y%m%d-%H%M%S)"
 csrf=""
 admin_token=""
@@ -46,11 +48,24 @@ csrf_from() {
     sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p' "$1" | head -n 1
 }
 
+curl_escape() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+write_curl_conf() {
+    local url="$1"
+    shift
+    printf 'url = "%s"\n' "$(curl_escape "$url")" > "$curl_conf"
+    for field in "$@"; do
+        printf 'data-urlencode = "%s"\n' "$(curl_escape "$field")" >> "$curl_conf"
+    done
+    chmod 600 "$curl_conf"
+}
+
 cleanup() {
     if [[ -n "$admin_token" && "$cleaned" -eq 0 ]]; then
-        curl -sS -o /dev/null -c "$jar" -b "$jar" \
-            --data-urlencode "_csrf=$csrf" \
-            "$base_url/admin/$admin_token/delete" >/dev/null 2>&1 || true
+        write_curl_conf "$base_url/admin/$admin_token/delete" "_csrf=$csrf"
+        curl -sS -o /dev/null -c "$jar" -b "$jar" --config "$curl_conf" >/dev/null 2>&1 || true
     fi
     rm -rf "$work_dir"
 }
@@ -74,11 +89,11 @@ if [[ -z "$csrf" ]]; then
 fi
 
 # 2. Cria o evento e captura o token do painel no Location.
-status="$(curl -sS -c "$jar" -b "$jar" -D "$headers" -o /dev/null -w '%{http_code}' \
-    --data-urlencode "_csrf=$csrf" \
-    --data-urlencode "name=$event_name" \
-    --data-urlencode "organizerName=Smoke Test" \
-    "$base_url/events")"
+write_curl_conf "$base_url/events" \
+    "_csrf=$csrf" \
+    "name=$event_name" \
+    "organizerName=Smoke Test"
+status="$(curl -sS -c "$jar" -b "$jar" -D "$headers" -o /dev/null -w '%{http_code}' --config "$curl_conf")"
 if [[ "$status" != "302" ]]; then
     echo "ERRO: POST /events retornou HTTP $status (esperado 302)." >&2
     if [[ "$status" == "429" ]]; then
@@ -95,7 +110,8 @@ if [[ -z "$admin_token" ]]; then
 fi
 
 # 3. Abre o painel e confirma que a sessão/token continuam válidos.
-status="$(curl -sS -c "$jar" -b "$jar" -o "$page" -w '%{http_code}' "$base_url/admin/$admin_token")"
+write_curl_conf "$base_url/admin/$admin_token"
+status="$(curl -sS -c "$jar" -b "$jar" -o "$page" -w '%{http_code}' --config "$curl_conf")"
 if [[ "$status" != "200" ]]; then
     echo "ERRO: GET do painel retornou HTTP $status." >&2
     exit 1
@@ -107,10 +123,10 @@ if [[ -z "$csrf" ]]; then
 fi
 
 # 4. Envia os links do organizador pelo mesmo caminho do painel.
-body="$(curl -sS -L -c "$jar" -b "$jar" \
-    --data-urlencode "_csrf=$csrf" \
-    --data-urlencode "email=$test_email" \
-    "$base_url/admin/$admin_token/links/email")"
+write_curl_conf "$base_url/admin/$admin_token/links/email" \
+    "_csrf=$csrf" \
+    "email=$test_email"
+body="$(curl -sS -L -c "$jar" -b "$jar" --config "$curl_conf")"
 
 if grep -q "Links enviados para o e-mail informado" <<<"$body"; then
     echo "OK: o Brevo aceitou o envio. Confira a caixa de entrada e os logs do Brevo."
@@ -129,9 +145,8 @@ else
 fi
 
 # 5. Apaga o evento temporário (o trap repete se algo falhar antes).
-status="$(curl -sS -o /dev/null -c "$jar" -b "$jar" -w '%{http_code}' \
-    --data-urlencode "_csrf=$csrf" \
-    "$base_url/admin/$admin_token/delete")"
+write_curl_conf "$base_url/admin/$admin_token/delete" "_csrf=$csrf"
+status="$(curl -sS -o /dev/null -c "$jar" -b "$jar" -w '%{http_code}' --config "$curl_conf")"
 if [[ "$status" == "302" || "$status" == "200" ]]; then
     cleaned=1
     echo "Evento temporário apagado."
