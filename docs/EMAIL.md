@@ -143,12 +143,12 @@ public record EmailSendResult(
     String errorCode, String errorMessage, boolean retryable) {}
 ```
 
-`BrevoEmailSender` usa `RestClient` e devolve resultado tipado. `LoggingEmailSender` cobre dev/test. Não use SMTP: sem `messageId`, sem idempotência e sem sandbox.
+- `BrevoEmailSender` usa `RestClient`, lê até 16 KB do corpo de resposta e devolve resultado tipado. `LoggingEmailSender` cobre dev/test. Não use SMTP: sem `messageId`, sem idempotência e sem sandbox.
 
 ### Listener e worker
 
 - O listener roda após o commit e grava o outbox em transação nova.
-- O worker (`@Scheduled(fixedDelay = 30_000)`) busca `PENDING`/`FAILED` com `attempts < 3`, verifica a cota diária (`EmailQuotaGuard`: `250/dia` global e `100/dia` por evento em UTC), chama a API e grava `SENT` ou `FAILED`.
+- O worker (`@Scheduled(fixedDelay = 30_000)`) busca `PENDING`/`FAILED` com `attempts < 3`, prepara e registra a tentativa em transação curta, chama a API fora de transação (sem prender conexão do banco durante I/O) e grava `SENT` ou `FAILED` em outra transação curta, verificando antes a cota diária (`EmailQuotaGuard`: `250/dia` global e `100/dia` por evento em UTC).
 - Se o teto diário interno for atingido, `EmailQuotaGuard` bloqueia o disparo (outbox ou links do organizador) antes de chamar o provedor, sem retentativas em loop.
 - Retry: 429 espera o reset; 5xx/rede usa backoff; 400 de payload e 401 não retentam.
 - `duplicate_parameter` com idempotência é tratado como enviado.

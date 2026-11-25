@@ -22,6 +22,7 @@ import org.springframework.web.client.RestClient;
 public class BrevoEmailSender implements EmailSender {
 
     private static final String BASE_URL = "https://api.brevo.com/v3";
+    private static final int MAX_RESPONSE_BYTES = 16 * 1024;
     private static final Pattern MESSAGE_ID =
             Pattern.compile("\"messageId\"\\s*:\\s*\"([^\"]*)\"");
     private static final Pattern CODE =
@@ -135,7 +136,7 @@ public class BrevoEmailSender implements EmailSender {
         if (input == null) {
             return "";
         }
-        return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        return new String(input.readNBytes(MAX_RESPONSE_BYTES), StandardCharsets.UTF_8);
     }
 
     private static String extract(Pattern pattern, String body) {

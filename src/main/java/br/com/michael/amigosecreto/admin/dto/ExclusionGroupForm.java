@@ -1,5 +1,6 @@
 package br.com.michael.amigosecreto.admin.dto;
 
+import br.com.michael.amigosecreto.participant.ParticipantService;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
@@ -7,7 +8,10 @@ import java.util.UUID;
 public record ExclusionGroupForm(
         @Size(max = 80, message = "O rótulo deve ter até 80 caracteres.")
         String label,
-        @Size(min = 2, message = "Selecione pelo menos 2 participantes.")
+        @Size(
+                min = 2,
+                max = ParticipantService.MAX_PARTICIPANTS,
+                message = "Selecione pelo menos 2 participantes. O máximo é 100.")
         List<UUID> memberIds) {
 
     public ExclusionGroupForm {

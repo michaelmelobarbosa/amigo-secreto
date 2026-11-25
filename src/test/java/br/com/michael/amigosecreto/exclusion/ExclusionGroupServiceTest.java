@@ -182,6 +182,27 @@ class ExclusionGroupServiceTest {
         assertEquals(group.getId(), views.get(0).id());
     }
 
+    @Test
+    void rejectsCreatingMoreThanMaxGroupsPerEvent() {
+        Event event = createEvent("Família", "Michael");
+        Participant ana = participantService.addByOrganizer(event, "Ana", null);
+        Participant bruno = participantService.addByOrganizer(event, "Bruno", null);
+        Set<java.util.UUID> members = Set.of(ana.getId(), bruno.getId());
+
+        for (int i = 0; i < ExclusionGroupService.MAX_GROUPS_PER_EVENT; i++) {
+            exclusionGroupService.create(event, "Grupo " + i, members);
+        }
+
+        RuleViolationException error = assertThrows(
+                RuleViolationException.class,
+                () -> exclusionGroupService.create(event, "Excedente", members));
+        assertEquals(
+                "O evento já atingiu o limite de "
+                        + ExclusionGroupService.MAX_GROUPS_PER_EVENT
+                        + " grupos de exclusão.",
+                error.getMessage());
+    }
+
     private Event createEvent(String name, String organizerName) {
         return eventService.create(new CreateEventCommand(
                 name,

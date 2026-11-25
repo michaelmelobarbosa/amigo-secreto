@@ -21,7 +21,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Orquestra o outbox de e-mail: enfileira após o sorteio, envia pelo adaptador
@@ -39,6 +41,7 @@ public class NotificationService {
     private final EmailSender emailSender;
     private final EmailContentBuilder contentBuilder;
     private final EmailQuotaGuard emailQuotaGuard;
+    private final TransactionTemplate transactionTemplate;
 
     public NotificationService(
             NotificationRepository notificationRepository,
@@ -46,13 +49,15 @@ public class NotificationService {
             EventRepository eventRepository,
             EmailSender emailSender,
             EmailContentBuilder contentBuilder,
-            EmailQuotaGuard emailQuotaGuard) {
+            EmailQuotaGuard emailQuotaGuard,
+            PlatformTransactionManager transactionManager) {
         this.notificationRepository = notificationRepository;
         this.participantRepository = participantRepository;
         this.eventRepository = eventRepository;
         this.emailSender = emailSender;
         this.contentBuilder = contentBuilder;
         this.emailQuotaGuard = emailQuotaGuard;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -93,12 +98,14 @@ public class NotificationService {
      */
     @Transactional
     public void resendForParticipant(Event event, UUID participantId) {
-        if (event.getStatus() != EventStatus.DRAWN || event.getDrawCount() <= 0) {
+        Event locked = eventRepository.findByIdForUpdate(event.getId())
+                .orElseThrow(() -> new NotFoundException(EVENT_NOT_FOUND));
+        if (locked.getStatus() != EventStatus.DRAWN || locked.getDrawCount() <= 0) {
             throw new RuleViolationException("O sorteio ainda não foi realizado.");
         }
 
         Participant participant = participantRepository
-                .findByIdAndEvent_Id(participantId, event.getId())
+                .findByIdAndEvent_Id(participantId, locked.getId())
                 .orElseThrow(() -> new NotFoundException(PARTICIPANT_NOT_FOUND));
         if (!hasEmail(participant.getEmail())) {
             throw new RuleViolationException("Participante sem e-mail cadastrado.");
@@ -106,9 +113,9 @@ public class NotificationService {
 
         Notification notification = notificationRepository
                 .findByParticipant_IdAndDrawCountAndChannel(
-                        participant.getId(), event.getDrawCount(), NotificationChannel.EMAIL)
+                        participant.getId(), locked.getDrawCount(), NotificationChannel.EMAIL)
                 .orElseGet(() -> new Notification(
-                        participant, event.getDrawCount(), NotificationChannel.EMAIL));
+                        participant, locked.getDrawCount(), NotificationChannel.EMAIL));
         notification.resetForRetry();
         notificationRepository.save(notification);
     }
@@ -139,57 +146,94 @@ public class NotificationService {
     }
 
     /**
-     * Envia uma notificação. Nunca lança por falha de provedor: o resultado vira
+     * Envia uma notificação mantendo a chamada HTTP ao provedor fora da
+     * transação de banco. Nunca lança por falha de provedor: o resultado vira
      * estado do outbox e o sorteio já está commitado.
      */
-    @Transactional
     public void send(UUID notificationId) {
-        Notification notification = notificationRepository.findById(notificationId).orElse(null);
-        if (notification == null
-                || notification.getStatus() == NotificationStatus.SENT
-                || notification.getStatus() == NotificationStatus.SKIPPED
-                || notification.getAttempts() >= Notification.MAX_ATTEMPTS) {
+        EmailMessage message = prepareForSend(notificationId);
+        if (message == null) {
             return;
         }
 
-        Participant participant = notification.getParticipant();
-        Event event = participant.getEvent();
-
-        if (!hasEmail(participant.getEmail())) {
-            notification.markSkipped("Participante sem e-mail cadastrado.");
-            return;
-        }
-        if (event.getStatus() != EventStatus.DRAWN
-                || event.getDrawCount() != notification.getDrawCount()) {
-            notification.markSkipped("O sorteio não corresponde mais a este aviso.");
-            return;
-        }
-        if (!emailQuotaGuard.allowSend(event.getId())) {
-            notification.markFailed("Limite diário de envio de e-mails atingido.", false);
-            return;
-        }
-
-        EmailContent content = contentBuilder.build(event, participant, notification.getDrawCount());
-        EmailMessage message = new EmailMessage(
-                participant.getEmail(),
-                participant.getName(),
-                content.subject(),
-                content.html(),
-                content.text(),
-                notification.getIdempotencyKey(),
-                content.tags());
-
-        notification.markAttempt();
+        EmailSendResult result;
         try {
-            EmailSendResult result = emailSender.send(message);
+            result = emailSender.send(message);
+        } catch (RuntimeException exception) {
+            recordFailure(
+                    notificationId,
+                    "Falha inesperada ao enviar: " + exception.getClass().getSimpleName(),
+                    true);
+            return;
+        }
+
+        recordOutcome(notificationId, result);
+    }
+
+    private EmailMessage prepareForSend(UUID notificationId) {
+        return transactionTemplate.execute(status -> {
+            Notification notification = notificationRepository.findById(notificationId).orElse(null);
+            if (notification == null
+                    || notification.getStatus() == NotificationStatus.SENT
+                    || notification.getStatus() == NotificationStatus.SKIPPED
+                    || notification.getAttempts() >= Notification.MAX_ATTEMPTS) {
+                return null;
+            }
+
+            Participant participant = notification.getParticipant();
+            Event event = participant.getEvent();
+
+            if (!hasEmail(participant.getEmail())) {
+                notification.markSkipped("Participante sem e-mail cadastrado.");
+                return null;
+            }
+            if (event.getStatus() != EventStatus.DRAWN
+                    || event.getDrawCount() != notification.getDrawCount()) {
+                notification.markSkipped("O sorteio não corresponde mais a este aviso.");
+                return null;
+            }
+            if (!emailQuotaGuard.allowSend(event.getId())) {
+                notification.markFailed("Limite diário de envio de e-mails atingido.", false);
+                return null;
+            }
+
+            EmailContent content =
+                    contentBuilder.build(event, participant, notification.getDrawCount());
+            notification.markAttempt();
+            notificationRepository.save(notification);
+
+            return new EmailMessage(
+                    participant.getEmail(),
+                    participant.getName(),
+                    content.subject(),
+                    content.html(),
+                    content.text(),
+                    notification.getIdempotencyKey(),
+                    content.tags());
+        });
+    }
+
+    private void recordOutcome(UUID notificationId, EmailSendResult result) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Notification notification = notificationRepository.findById(notificationId).orElse(null);
+            if (notification == null) {
+                return;
+            }
             if (result.accepted()) {
                 notification.markSent(result.providerMessageId());
             } else {
                 notification.markFailed(result.errorMessage(), result.retryable());
             }
-        } catch (RuntimeException exception) {
-            notification.markFailed("Falha inesperada ao enviar: " + exception.getMessage(), true);
-        }
+        });
+    }
+
+    private void recordFailure(UUID notificationId, String error, boolean retryable) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Notification notification = notificationRepository.findById(notificationId).orElse(null);
+            if (notification != null) {
+                notification.markFailed(error, retryable);
+            }
+        });
     }
 
     private static boolean hasEmail(String email) {
