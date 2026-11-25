@@ -15,6 +15,7 @@ import br.com.michael.amigosecreto.email.EmailSendResult;
 import br.com.michael.amigosecreto.email.EmailSender;
 import br.com.michael.amigosecreto.event.Event;
 import br.com.michael.amigosecreto.invite.InviteService;
+import br.com.michael.amigosecreto.notification.EmailQuotaGuard;
 import br.com.michael.amigosecreto.participant.Participant;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -107,11 +108,36 @@ class OrganizerLinksMailerTest {
 
         assertThat(result.accepted()).isFalse();
         assertThat(result.disabled()).isFalse();
+        assertThat(result.quotaExceeded()).isFalse();
+    }
+
+    @Test
+    void rejectsSendWhenDailyQuotaIsExceeded() {
+        EmailSender sender = mock(EmailSender.class);
+        EmailQuotaGuard quotaGuard = mock(EmailQuotaGuard.class);
+        when(quotaGuard.allowSend(any())).thenReturn(false);
+        OrganizerLinksMailer mailer = mailer(sender, enabledProperties(false), quotaGuard);
+
+        OrganizerLinksMailer.Result result =
+                mailer.send(event, organizer, "destino@example.com");
+
+        assertThat(result.accepted()).isFalse();
+        assertThat(result.disabled()).isFalse();
+        assertThat(result.quotaExceeded()).isTrue();
+        verifyNoInteractions(sender);
     }
 
     private OrganizerLinksMailer mailer(EmailSender sender, EmailProperties properties) {
+        EmailQuotaGuard quotaGuard = mock(EmailQuotaGuard.class);
+        when(quotaGuard.allowSend(any())).thenReturn(true);
+        return mailer(sender, properties, quotaGuard);
+    }
+
+    private OrganizerLinksMailer mailer(
+            EmailSender sender, EmailProperties properties, EmailQuotaGuard quotaGuard) {
         LinkBuilder linkBuilder = new LinkBuilder(new AppProperties("https://example.test"));
-        return new OrganizerLinksMailer(properties, sender, new InviteService(linkBuilder));
+        return new OrganizerLinksMailer(
+                properties, sender, new InviteService(linkBuilder), quotaGuard);
     }
 
     private EmailProperties enabledProperties(boolean sandbox) {

@@ -11,6 +11,7 @@ import br.com.michael.amigosecreto.common.RuleViolationException;
 import br.com.michael.amigosecreto.draw.DrawCompletedEvent;
 import br.com.michael.amigosecreto.draw.DrawService;
 import br.com.michael.amigosecreto.email.EmailMessage;
+import br.com.michael.amigosecreto.email.EmailProperties;
 import br.com.michael.amigosecreto.email.EmailSendResult;
 import br.com.michael.amigosecreto.email.EmailSender;
 import br.com.michael.amigosecreto.event.Event;
@@ -242,6 +243,28 @@ class NotificationServiceTest {
         assertThat(skipped.getStatus()).isEqualTo(NotificationStatus.SKIPPED);
         assertThat(skipped.getLastError())
                 .isEqualTo("O sorteio não corresponde mais a este aviso.");
+        verify(emailSender, never()).send(any(EmailMessage.class));
+    }
+
+    @Test
+    void sendMarksNotificationFailedWithoutCallingProviderWhenEventDailyQuotaIsReached() {
+        Event event = createDrawnEvent("notif_quota", EmailProperties.DEFAULT_EVENT_DAILY_LIMIT + 1);
+        Participant ana = addParticipant(event, "Ana", "ana@example.com", "notif_quota_ana");
+        for (int i = 1; i <= EmailProperties.DEFAULT_EVENT_DAILY_LIMIT; i++) {
+            Notification sentBefore = addNotification(ana, i);
+            sentBefore.markAttempt();
+            sentBefore.markSent("brevo-prev-" + i);
+            notificationRepository.save(sentBefore);
+        }
+        Notification current = addNotification(ana, EmailProperties.DEFAULT_EVENT_DAILY_LIMIT + 1);
+        notificationRepository.flush();
+
+        notificationService.send(current.getId());
+
+        Notification blocked = reload(current.getId());
+        assertThat(blocked.getStatus()).isEqualTo(NotificationStatus.FAILED);
+        assertThat(blocked.getAttempts()).isEqualTo(Notification.MAX_ATTEMPTS);
+        assertThat(blocked.getLastError()).isEqualTo("Limite diário de envio de e-mails atingido.");
         verify(emailSender, never()).send(any(EmailMessage.class));
     }
 

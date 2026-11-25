@@ -20,6 +20,7 @@ public record RateLimitProperties(
         int wishlistPerWindow,
         int emailLinksPerWindow,
         int emailResendPerWindow,
+        int adminWritePerWindow,
         Duration window,
         Duration drawWindow,
         Duration emailWindow,
@@ -32,6 +33,7 @@ public record RateLimitProperties(
         wishlistPerWindow = positive(wishlistPerWindow, 30);
         emailLinksPerWindow = positive(emailLinksPerWindow, 10);
         emailResendPerWindow = positive(emailResendPerWindow, 20);
+        adminWritePerWindow = positive(adminWritePerWindow, 40);
         window = positive(window, Duration.ofMinutes(10));
         drawWindow = positive(drawWindow, Duration.ofHours(1));
         emailWindow = positive(emailWindow, Duration.ofHours(1));

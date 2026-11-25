@@ -7,6 +7,7 @@ import br.com.michael.amigosecreto.email.EmailSender;
 import br.com.michael.amigosecreto.event.Event;
 import br.com.michael.amigosecreto.invite.InviteLinks;
 import br.com.michael.amigosecreto.invite.InviteService;
+import br.com.michael.amigosecreto.notification.EmailQuotaGuard;
 import br.com.michael.amigosecreto.participant.Participant;
 import java.util.List;
 import java.util.UUID;
@@ -28,19 +29,26 @@ public class OrganizerLinksMailer {
     private final EmailProperties properties;
     private final EmailSender emailSender;
     private final InviteService inviteService;
+    private final EmailQuotaGuard emailQuotaGuard;
 
     public OrganizerLinksMailer(
             EmailProperties properties,
             EmailSender emailSender,
-            InviteService inviteService) {
+            InviteService inviteService,
+            EmailQuotaGuard emailQuotaGuard) {
         this.properties = properties;
         this.emailSender = emailSender;
         this.inviteService = inviteService;
+        this.emailQuotaGuard = emailQuotaGuard;
     }
 
     public Result send(Event event, Participant organizer, String toEmail) {
         if (!properties.enabled()) {
             return Result.disabledResult();
+        }
+        if (!emailQuotaGuard.allowSend(event.getId())) {
+            log.warn("Envio avulso dos links recusado: cota diária de e-mail atingida.");
+            return Result.quotaExceededResult();
         }
 
         InviteLinks links = inviteService.linksFor(event, organizer);
@@ -55,10 +63,12 @@ public class OrganizerLinksMailer {
 
         try {
             EmailSendResult result = emailSender.send(message);
-            if (!result.accepted()) {
+            if (result.accepted()) {
+                emailQuotaGuard.recordDirectSend(event.getId());
+            } else {
                 log.warn("Brevo recusou os links do organizador: {}", result.errorCode());
             }
-            return new Result(result.accepted(), isSandbox(), false);
+            return new Result(result.accepted(), isSandbox(), false, false);
         } catch (RuntimeException exception) {
             // Sem e-mail ou token no log; a classe basta para diagnóstico.
             log.warn("Falha ao enviar links do organizador: {}", exception.getClass().getSimpleName());
@@ -152,14 +162,18 @@ public class OrganizerLinksMailer {
         return value == null ? "" : value.replaceAll("[\\r\\n]+", " ").trim();
     }
 
-    public record Result(boolean accepted, boolean sandbox, boolean disabled) {
+    public record Result(boolean accepted, boolean sandbox, boolean disabled, boolean quotaExceeded) {
 
         static Result disabledResult() {
-            return new Result(false, false, true);
+            return new Result(false, false, true, false);
         }
 
         static Result rejectedResult() {
-            return new Result(false, false, false);
+            return new Result(false, false, false, false);
+        }
+
+        static Result quotaExceededResult() {
+            return new Result(false, false, false, true);
         }
     }
 }

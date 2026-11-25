@@ -26,13 +26,14 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
-        String path = pathOf(request);
+        String path = RequestPaths.normalizedPath(request);
+        response.setHeader("Referrer-Policy", "no-referrer");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("X-Frame-Options", "DENY");
+
         if (!isStaticAsset(path)) {
             response.setHeader("Cache-Control", "no-store");
             response.setHeader("Pragma", "no-cache");
-            response.setHeader("Referrer-Policy", "no-referrer");
-            response.setHeader("X-Content-Type-Options", "nosniff");
-            response.setHeader("X-Frame-Options", "DENY");
             response.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
             if (isSensitive(path)) {
                 response.setHeader("X-Robots-Tag", "noindex, nofollow");
@@ -40,15 +41,6 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    private String pathOf(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (!contextPath.isEmpty() && path.startsWith(contextPath)) {
-            return path.substring(contextPath.length());
-        }
-        return path;
     }
 
     private boolean isStaticAsset(String path) {

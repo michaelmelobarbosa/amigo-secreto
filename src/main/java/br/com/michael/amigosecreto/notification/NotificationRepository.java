@@ -1,5 +1,6 @@
 package br.com.michael.amigosecreto.notification;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +38,11 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
      */
     List<Notification> findTop20ByStatusInAndAttemptsLessThanOrderByCreatedAtAsc(
             Collection<NotificationStatus> statuses, int attempts);
+
+    long countByStatusAndSentAtGreaterThanEqual(NotificationStatus status, Instant since);
+
+    long countByParticipant_Event_IdAndStatusAndSentAtGreaterThanEqual(
+            UUID eventId, NotificationStatus status, Instant since);
 
     @Modifying(flushAutomatically = true)
     @Query("delete from Notification n where n.participant.id = :participantId")

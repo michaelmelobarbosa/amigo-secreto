@@ -67,7 +67,17 @@ class RateLimitFilterTest {
         assertThat(call(filter, "POST", "/p/p_abc/wishlist", "203.0.113.10").passed()).isTrue();
 
         // Rotas fora do escopo não consomem cota.
+        assertThat(call(filter, "POST", "/admin/adm_abc/registration", "203.0.113.10").passed()).isTrue();
+    }
+
+    @Test
+    void limitsAdminParticipantAndExclusionCreationTogether() throws Exception {
+        RateLimitFilter filter = filter(propertiesWithAdminWrite(2));
+
         assertThat(call(filter, "POST", "/admin/adm_abc/participants", "203.0.113.10").passed()).isTrue();
+        assertThat(call(filter, "POST", "/admin/adm_abc/exclusions", "203.0.113.10").passed()).isTrue();
+        assertThat(call(filter, "POST", "/admin/adm_abc/participants;x=1", "203.0.113.10").passed()).isFalse();
+        assertThat(call(filter, "POST", "/admin/adm_abc/exclusions", "203.0.113.10").passed()).isFalse();
     }
 
     @Test
@@ -138,6 +148,37 @@ class RateLimitFilterTest {
         assertThat(call(filter, "POST", "/events", "evil.invalid:80").passed()).isTrue();
         assertThat(call(filter, "POST", "/events", "evil.invalid:80").passed()).isFalse();
         assertThat(call(filter, "POST", "/events", "other.invalid:80").passed()).isTrue();
+    }
+
+    @Test
+    void doesNotBypassLimitWithMatrixParametersEncodedCharsOrDotSegments() throws Exception {
+        RateLimitFilter filter = filter(properties(true, 1, 1, 1, 1));
+
+        assertThat(call(filter, "POST", "/events", "203.0.113.10").passed()).isTrue();
+        assertThat(call(filter, "POST", "/events;x=1", "203.0.113.10").passed()).isFalse();
+        assertThat(call(filter, "POST", "/%65vents", "203.0.113.10").passed()).isFalse();
+        assertThat(call(filter, "POST", "//events", "203.0.113.10").passed()).isFalse();
+        assertThat(call(filter, "POST", "/css/../events", "203.0.113.10").passed()).isFalse();
+
+        assertThat(call(filter, "POST", "/join/inv_abc", "203.0.113.10").passed()).isTrue();
+        assertThat(call(filter, "POST", "/join/inv_abc;a=1", "203.0.113.10").passed()).isFalse();
+
+        assertThat(call(filter, "POST", "/admin/adm_abc/draw", "203.0.113.10").passed()).isTrue();
+        assertThat(call(filter, "POST", "/admin/adm_abc/draw;foo=bar", "203.0.113.10").passed()).isFalse();
+        assertThat(call(filter, "POST", "/admin;a=1/adm_abc/redraw;b=2", "203.0.113.10").passed()).isFalse();
+        assertThat(call(filter, "POST", "/admin/adm_abc/%64raw", "203.0.113.10").passed()).isFalse();
+
+        assertThat(call(filter, "POST", "/p/p_abc/wishlist", "203.0.113.10").passed()).isTrue();
+        assertThat(call(filter, "POST", "/p/p_abc/wishlist;x=1", "203.0.113.10").passed()).isFalse();
+
+        RateLimitFilter emailFilter = filter(emailProperties(1, 1, Duration.ofHours(1)));
+        assertThat(call(emailFilter, "POST", "/admin/adm_abc/links/email", "203.0.113.10").passed()).isTrue();
+        assertThat(call(emailFilter, "POST", "/admin/adm_abc/links/email;x=1", "203.0.113.10").passed()).isFalse();
+
+        assertThat(call(emailFilter, "POST", "/admin/adm_abc/participants/p_1/email/resend", "203.0.113.10")
+                .passed()).isTrue();
+        assertThat(call(emailFilter, "POST", "/admin/adm_abc/participants/p_1/email/resend;x=1", "203.0.113.10")
+                .passed()).isFalse();
     }
 
     @Test
@@ -216,10 +257,27 @@ class RateLimitFilterTest {
                 wishlist,
                 10,
                 20,
+                40,
                 Duration.ofMinutes(10),
                 Duration.ofHours(1),
                 Duration.ofHours(1),
                 maxKeys);
+    }
+
+    private static RateLimitProperties propertiesWithAdminWrite(int adminWrite) {
+        return new RateLimitProperties(
+                true,
+                5,
+                30,
+                10,
+                30,
+                10,
+                20,
+                adminWrite,
+                Duration.ofMinutes(10),
+                Duration.ofHours(1),
+                Duration.ofHours(1),
+                10_000);
     }
 
     private static RateLimitProperties emailProperties(
@@ -232,6 +290,7 @@ class RateLimitFilterTest {
                 30,
                 links,
                 resend,
+                40,
                 Duration.ofMinutes(10),
                 Duration.ofHours(1),
                 emailWindow,

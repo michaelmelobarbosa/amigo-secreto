@@ -43,6 +43,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final Pattern EMAIL_LINKS_PATH = Pattern.compile("^/admin/[^/]+/links/email$");
     private static final Pattern EMAIL_RESEND_PATH =
             Pattern.compile("^/admin/[^/]+/participants/[^/]+/email/resend$");
+    private static final Pattern ADMIN_PARTICIPANT_ADD_PATH =
+            Pattern.compile("^/admin/[^/]+/participants$");
+    private static final Pattern ADMIN_EXCLUSION_CREATE_PATH =
+            Pattern.compile("^/admin/[^/]+/exclusions$");
     private static final Pattern WISHLIST_PATH = Pattern.compile("^/p/[^/]+/wishlist$");
 
     private static final String TOO_MANY_REQUESTS_BODY = """
@@ -117,7 +121,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        Category category = categoryOf(pathOf(request));
+        Category category = categoryOf(RequestPaths.normalizedPath(request));
         if (category == null) {
             filterChain.doFilter(request, response);
             return;
@@ -136,15 +140,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return "POST".equalsIgnoreCase(method);
     }
 
-    private static String pathOf(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (contextPath != null && !contextPath.isEmpty() && path.startsWith(contextPath)) {
-            return path.substring(contextPath.length());
-        }
-        return path;
-    }
-
     private static Category categoryOf(String path) {
         if ("/events".equals(path)) {
             return Category.EVENT_CREATE;
@@ -160,6 +155,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
         if (EMAIL_RESEND_PATH.matcher(path).matches()) {
             return Category.EMAIL_RESEND;
+        }
+        if (ADMIN_PARTICIPANT_ADD_PATH.matcher(path).matches()
+                || ADMIN_EXCLUSION_CREATE_PATH.matcher(path).matches()) {
+            return Category.ADMIN_WRITE;
         }
         if (WISHLIST_PATH.matcher(path).matches()) {
             return Category.WISHLIST;
@@ -280,6 +279,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         DRAW,
         EMAIL_LINKS,
         EMAIL_RESEND,
+        ADMIN_WRITE,
         WISHLIST;
 
         int limit(RateLimitProperties properties) {
@@ -289,6 +289,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 case DRAW -> properties.drawPerWindow();
                 case EMAIL_LINKS -> properties.emailLinksPerWindow();
                 case EMAIL_RESEND -> properties.emailResendPerWindow();
+                case ADMIN_WRITE -> properties.adminWritePerWindow();
                 case WISHLIST -> properties.wishlistPerWindow();
             };
         }

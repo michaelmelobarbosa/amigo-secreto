@@ -44,15 +44,14 @@ O painel nunca recebe `Assignment`. A página do participante recebe apenas o pr
 
 ## Headers, cache e indexação
 
-Rotas dinâmicas recebem:
+Todas as respostas (incluindo arquivos estáticos) recebem `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY`. Rotas dinâmicas recebem adicionalmente:
 
 - `Cache-Control: no-store` e `Pragma: no-cache`;
-- `Referrer-Policy: no-referrer`;
-- `X-Content-Type-Options: nosniff`;
-- `X-Frame-Options: DENY`;
 - `Content-Security-Policy` restritiva (`script-src 'self'`, `frame-ancestors 'none'`);
-- `X-Robots-Tag: noindex, nofollow`;
+- `X-Robots-Tag: noindex, nofollow` em `/admin/`, `/p/` e `/join/`;
 - `robots.txt` com `Disallow: /`.
+
+`SecurityHeadersFilter` e `RateLimitFilter` normalizam o caminho da requisição em `RequestPaths` (removendo parâmetros de matriz `;...`, barras repetidas e segmentos `.`/`..`) antes de classificar a rota, evitando contorno por variações de URI.
 
 Se for necessário telemetria no proxy, redija a URI inteira: o token está no **path**, não na query string. Um access log comum gravaria credenciais em disco.
 
@@ -67,6 +66,7 @@ Implementado em memória por IP e categoria, em `RateLimitFilter`, com janela fi
 | `POST /admin/{adminToken}/draw` e `/redraw` | `draw` | 10 / 1 h |
 | `POST /admin/{adminToken}/links/email` | `email-links` | 10 / 1 h |
 | `POST /admin/{adminToken}/participants/{id}/email/resend` | `email-resend` | 20 / 1 h |
+| `POST /admin/{adminToken}/participants` e `/exclusions` | `admin-write` | 40 / 10 min |
 | `POST /p/{accessToken}/wishlist` | `wishlist` | 30 / 10 min |
 
 Configuração:
@@ -81,6 +81,7 @@ app:
     wishlist-per-window: ${RATE_LIMIT_WISHLIST:30}
     email-links-per-window: ${RATE_LIMIT_EMAIL_LINKS:10}
     email-resend-per-window: ${RATE_LIMIT_EMAIL_RESEND:20}
+    admin-write-per-window: ${RATE_LIMIT_ADMIN_WRITE:40}
     window: ${RATE_LIMIT_WINDOW:PT10M}
     draw-window: ${RATE_LIMIT_DRAW_WINDOW:PT1H}
     email-window: ${RATE_LIMIT_EMAIL_WINDOW:PT1H}
@@ -106,13 +107,13 @@ O app não publica porta: só o Caddy da rede `edge` o alcança. Teste com `X-Fo
 - Uma instância só; reiniciar o container zera contadores.
 - NAT compartilhado divide o balde; por isso os limites são altos.
 - Não impede alguém com o convite de preencher vagas lentamente; para isso valem remover participante e regenerar o convite.
-- Não há limite diário de e-mails nem cota separada de notificações; a cota é a do Brevo.
+- O teto diário interno de e-mails (`EMAIL_DAILY_LIMIT=250` global e `EMAIL_EVENT_DAILY_LIMIT=100` por evento em UTC) protege a cota gratuita do Brevo (300/dia), mas o contador de envios avulsos do painel fica em memória.
 - Redis, WAF, captcha e limite por conta ficam fora desta versão.
 
 ## E-mail e privacidade
 
 - E-mail é opcional e não é credencial.
-- Endereços são normalizados, não aparecem em página pública e são apagados em cascata com o evento/participante.
+- Endereços são normalizados, únicos por evento, não aparecem em página pública e são apagados em cascata com o evento/participante.
 - A API key nunca é logada, ecoada em erro ou versionada.
 - A chave de produção é restrita a envio.
 - Não há pixel de rastreamento; `removeTrackingPixel` é enviado ao provedor.
@@ -151,7 +152,7 @@ Detalhes operacionais em [EMAIL.md](EMAIL.md).
 - Rate limit em memória, sem distribuição.
 - Sessão sem rotação explícita de ID.
 - Sem testes de concorrência no Postgres real (a suíte roda em H2).
-- Cota do Brevo de 300/dia sem teto interno separado.
+- Contador diário de envios avulsos de links (fora do outbox) fica em memória e reinicia com o container.
 
 ## Checklist de verificação
 
@@ -182,7 +183,7 @@ Testes automatizados relevantes:
 
 - `common/TokenGenerator`, `common/LinkBuilder`
 - `common/web/CsrfTokenManager`, `common/web/CsrfTokenInterceptor`
-- `common/web/SecurityHeadersFilter`
+- `common/web/SecurityHeadersFilter`, `common/web/RequestPaths`
 - `common/web/RateLimitFilter`, `common/RateLimitProperties`
 - `common/web/GlobalExceptionHandler`
-- `notification/` e `email/` para entrega e outbox
+- `notification/`, `notification/EmailQuotaGuard` e `email/` para entrega, cota diária e outbox
