@@ -295,7 +295,8 @@ class Block5SecurityIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().string("X-Frame-Options", "DENY"));
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Permissions-Policy", "camera=(), microphone=(), geolocation=()"));
     }
 
     // ---------- IDOR ----------
@@ -618,6 +619,7 @@ class Block5SecurityIntegrationTest {
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Permissions-Policy", "camera=(), microphone=(), geolocation=()"))
                 .andExpect(header().string("Content-Security-Policy", allOf(
                         containsString("default-src 'self'"),
                         containsString("frame-ancestors 'none'"))))

@@ -386,7 +386,8 @@ public class AdminController {
     }
 
     private String redirectToDashboard(String adminToken, RedirectAttributes redirectAttributes) {
-        return "redirect:/admin/" + adminToken;
+        redirectAttributes.addAttribute("adminToken", adminToken);
+        return "redirect:/admin/{adminToken}";
     }
 
     private static String normalizedName(String name) {

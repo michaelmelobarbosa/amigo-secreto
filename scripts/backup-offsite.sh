@@ -62,10 +62,12 @@ if [ -n "$BUCKET_BYTES" ] && [ "$BUCKET_BYTES" -gt "$SIZE_LIMIT_BYTES" ]; then
 fi
 
 # Heartbeat: só depois de dump, uploads duplos e checksums validados.
+# Passa a URL via --config - para não expor o token do healthcheck no argv/ps.
 if [ -s "$HEARTBEAT_FILE" ]; then
-    HEARTBEAT_URL="$(tr -d " \r\n" < "$HEARTBEAT_FILE")"
+    HEARTBEAT_URL="$(tr -d ' "\r\n\\' < "$HEARTBEAT_FILE")"
     if [ -n "$HEARTBEAT_URL" ]; then
-        curl -fsS -m 20 --retry 3 "$HEARTBEAT_URL" >/dev/null 2>&1 || \
+        printf 'url = "%s"\n' "$HEARTBEAT_URL" | \
+            curl -fsS -m 20 --retry 3 --config - >/dev/null 2>&1 || \
             echo "AVISO: heartbeat não respondeu; o job seguiu com sucesso" >&2
     fi
 fi

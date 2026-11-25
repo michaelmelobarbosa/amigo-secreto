@@ -14,6 +14,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class SecurityHeadersFilter extends OncePerRequestFilter {
 
+    private static final String PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=()";
+
     private static final String CONTENT_SECURITY_POLICY = """
             default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; \
             font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; \
@@ -30,6 +32,7 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
         response.setHeader("Referrer-Policy", "no-referrer");
         response.setHeader("X-Content-Type-Options", "nosniff");
         response.setHeader("X-Frame-Options", "DENY");
+        response.setHeader("Permissions-Policy", PERMISSIONS_POLICY);
 
         if (!isStaticAsset(path)) {
             response.setHeader("Cache-Control", "no-store");
