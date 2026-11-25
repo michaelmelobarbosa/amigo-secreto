@@ -29,8 +29,11 @@ public class EmailNotificationWorker {
             try {
                 notificationService.send(notificationId);
             } catch (RuntimeException exception) {
-                // Sem e-mail/token no log; o id é suficiente para diagnóstico.
-                log.warn("Falha ao processar notificação {}: {}", notificationId, exception.getMessage());
+                // Sem e-mail/token no log; o id e a classe bastam para diagnóstico.
+                log.warn(
+                        "Falha ao processar notificação {}: {}",
+                        notificationId,
+                        exception.getClass().getSimpleName());
             }
         }
     }

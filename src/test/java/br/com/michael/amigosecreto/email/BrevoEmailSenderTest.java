@@ -196,6 +196,25 @@ class BrevoEmailSenderTest {
                 .hasMessageContaining("from-email");
     }
 
+    @Test
+    void capsResponseBodyReadAtSixteenKilobytes() {
+        RestClient.Builder builder = restClientBuilder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        BrevoEmailSender sender = new BrevoEmailSender(properties(true), builder.build());
+        String hugeBody = "{\"code\":\"invalid_parameter\",\"message\":\"" + "x".repeat(32_000) + "\"}";
+
+        server.expect(requestTo(BASE_URL + "/smtp/email"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(hugeBody));
+
+        EmailSendResult result = sender.send(message());
+
+        assertThat(result.accepted()).isFalse();
+        assertThat(result.errorCode()).isEqualTo("invalid_parameter");
+        server.verify();
+    }
+
     private static RestClient.Builder restClientBuilder() {
         return RestClient.builder()
                 .baseUrl(BASE_URL)

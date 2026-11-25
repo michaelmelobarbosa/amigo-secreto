@@ -57,6 +57,7 @@ server:
       # Sem URL rewriting: o ;jsessionid não aparece em links quando o cliente
       # ainda não aceitou o cookie.
       tracking-modes: cookie
+      timeout: 30m
       cookie:
         http-only: true
         same-site: lax

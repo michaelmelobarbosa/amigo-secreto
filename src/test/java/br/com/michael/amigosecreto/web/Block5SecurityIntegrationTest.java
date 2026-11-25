@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
@@ -32,6 +33,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -172,6 +174,51 @@ class Block5SecurityIntegrationTest {
                 .andExpect(view().name("error/403"));
 
         assertThat(eventRepository.count()).isEqualTo(eventsBefore);
+    }
+
+    @Test
+    void postWithCsrfInQueryStringIsForbidden() throws Exception {
+        MockHttpSession session = sessionWithCsrfToken();
+        long eventsBefore = eventRepository.count();
+
+        mockMvc.perform(post("/events?_csrf=" + csrfToken(session))
+                        .session(session)
+                        .param("name", EVENT_NAME)
+                        .param("organizerName", ORGANIZER_NAME))
+                .andExpect(status().isForbidden())
+                .andExpect(view().name("error/403"));
+
+        assertThat(eventRepository.count()).isEqualTo(eventsBefore);
+    }
+
+    @Test
+    void nonFormRequestsAndNotFoundDoNotCreateSession() throws Exception {
+        MvcResult notFoundAdmin = mockMvc.perform(get("/admin/adm_inexistente"))
+                .andExpect(status().isNotFound())
+                .andReturn();
+        assertThat(notFoundAdmin.getRequest().getSession(false)).isNull();
+
+        MvcResult notFoundParticipant = mockMvc.perform(get("/p/p_inexistente"))
+                .andExpect(status().isNotFound())
+                .andReturn();
+        assertThat(notFoundParticipant.getRequest().getSession(false)).isNull();
+
+        MvcResult notFoundJoin = mockMvc.perform(get("/join/inv_inexistente"))
+                .andExpect(status().isNotFound())
+                .andReturn();
+        assertThat(notFoundJoin.getRequest().getSession(false)).isNull();
+
+        MvcResult headRoot = mockMvc.perform(head("/"))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(headRoot.getRequest().getSession(false)).isNull();
+
+        MockHttpSession session = sessionWithCsrfToken();
+        String adminToken = createEventThroughForm(session, EVENT_NAME, ORGANIZER_NAME);
+        MvcResult linksDownload = mockMvc.perform(get("/admin/{adminToken}/links.txt", adminToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(linksDownload.getRequest().getSession(false)).isNull();
     }
 
     // ---------- Headers ----------

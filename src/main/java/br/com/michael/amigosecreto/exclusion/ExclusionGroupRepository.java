@@ -11,6 +11,8 @@ public interface ExclusionGroupRepository extends JpaRepository<ExclusionGroup, 
 
     List<ExclusionGroup> findByEvent_Id(UUID eventId);
 
+    long countByEvent_Id(UUID eventId);
+
     Optional<ExclusionGroup> findByIdAndEvent_Id(UUID id, UUID eventId);
 
     @Query("""

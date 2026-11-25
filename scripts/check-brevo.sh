@@ -13,7 +13,7 @@
 #   bash scripts/check-brevo.sh voce@exemplo.com
 #
 # Requer: curl, sed, mktemp. Não imprime a API key.
-# Se o Brevo usar allowlist, rode na VPS (IP de saída <VPS_PUBLIC_IP>).
+# Se o Brevo usar allowlist, rode na VPS (IP de saída cadastrado no painel do Brevo).
 
 set -euo pipefail
 
@@ -154,7 +154,7 @@ case "$status" in
         ;;
     401|403)
         echo "FALHOU: Brevo recusou a autenticação (HTTP $status)." >&2
-        echo "        Confira a API key e a allowlist de IP (<VPS_PUBLIC_IP>)." >&2
+        echo "        Confira a API key e a allowlist de IP no Brevo." >&2
         exit 1
         ;;
     429)
