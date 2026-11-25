@@ -232,6 +232,25 @@ class Block5SecurityIntegrationTest {
                 .andExpect(content().string(containsString("Disallow: /")));
     }
 
+    @Test
+    void adminDashboardWithMatrixParamsOrDotSegmentsKeepsPrivacyHeaders() throws Exception {
+        MockHttpSession session = sessionWithCsrfToken();
+        String adminToken = createEventThroughForm(session, EVENT_NAME, ORGANIZER_NAME);
+
+        assertPrivacyHeaders(mockMvc.perform(get("/admin;x=1/{adminToken}", adminToken))
+                .andExpect(status().isOk()));
+        assertPrivacyHeaders(mockMvc.perform(get("/css/../admin/{adminToken}", adminToken)));
+    }
+
+    @Test
+    void staticAssetSendsBasicHardeningHeaders() throws Exception {
+        mockMvc.perform(get("/images/gift.svg"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("X-Frame-Options", "DENY"));
+    }
+
     // ---------- IDOR ----------
 
     @Test

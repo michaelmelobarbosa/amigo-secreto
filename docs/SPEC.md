@@ -237,7 +237,7 @@ Use POST para remoções (formulários HTML não têm DELETE) e proteja contra C
 - Rotas `/p/**`, `/join/**` e `/admin/**` com `Cache-Control: no-store` e `Referrer-Policy: no-referrer`, para o token não vazar para terceiros. Os headers de segurança também cobrem `/` e `/events` (o redirect de criação carrega o token do painel).
 - `robots.txt` bloqueia indexação; CSP restritiva (`script-src 'self'`, `frame-ancestors 'none'`); `X-Content-Type-Options`, `X-Frame-Options` e `X-Robots-Tag` nas rotas sensíveis.
 - Cookie de sessão `HttpOnly`, `SameSite=Lax` e `Secure` por padrão. O perfil `dev` desativa `Secure` para rodar em HTTP local; produção exige HTTPS.
-- O convite é público: limite de tamanho nos campos, teto de participantes por evento e rate limiting por IP em `POST /events` (5/10 min), `POST /join/{inviteCode}` (30/10 min), `draw`/`redraw` (10/h), wishlist (30/10 min) e endpoints de e-mail (`links/email` 10/h, `email/resend` 20/h), em memória, com `429` + `Retry-After`. **Validado em produção em 2026-11-15** (e-mail em 2026-11-16), inclusive contra `X-Forwarded-For` forjado. Detalhes e limites em [`SECURITY.md`](SECURITY.md).
+- O convite é público: limite de tamanho nos campos, teto de participantes por evento e rate limiting por IP em `POST /events` (5/10 min), `POST /join/{inviteCode}` (30/10 min), `draw`/`redraw` (10/h), wishlist (30/10 min), adição/exclusões no painel (40/10 min) e endpoints de e-mail (`links/email` 10/h, `email/resend` 20/h), em memória, com `429` + `Retry-After`. Além disso, cada evento rejeita e-mails duplicados e o envio de e-mails possui teto diário interno (250/dia global, 100/dia por evento). **Validado em produção em 2026-11-15** (e-mail em 2026-11-16), inclusive contra `X-Forwarded-For` forjado. Detalhes e limites em [`SECURITY.md`](SECURITY.md).
 - Validação de entrada com Bean Validation e escape automático do Thymeleaf contra XSS. Proteção CSRF com token de sessão próprio em todos os POSTs.
 - Apagar evento exige CSRF e confirmação explícita; a operação é irreversível.
 - Segredos (senha do banco) em variáveis de ambiente, fora do repositório.
@@ -352,7 +352,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 - E-mail transacional (fase 2): link individual após o sorteio/refazer, e-mail opcional, Brevo, domínio/SPF/DKIM/DMARC, retentativas e status de entrega. **Implementado, ligado e validado ponta a ponta em 2026-11-16**; SPF publicado e rate limit dos endpoints de e-mail em produção (validado no mesmo dia). Detalhes na seção 15.
 - Telefone/WhatsApp Cloud API/SMS/Telegram como canal automatizado. O MVP mantém o `wa.me` manual; WhatsApp API é paga para mensagens utility iniciadas pelo negócio e SMS é pago.
 - Recuperação de link por e-mail e double opt-in (avaliar depois da fase 2).
-- Rate limiting por IP em `/events`, `/join` e sorteio, **implementado e validado em produção em 2026-11-15**. Limite diário, Redis e WAF continuam fora. Detalhes em [`SECURITY.md`](SECURITY.md).
+- Rate limiting por IP em `/events`, `/join` e sorteio, **implementado e validado em produção em 2026-11-15**, com limite diário interno de e-mails adicionado para proteger a cota do provedor. Redis e WAF continuam fora. Detalhes em [`SECURITY.md`](SECURITY.md).
 - Permutação com reciprocidade permitida, como opção do evento.
 - Expiração automática de eventos antigos (limpeza de dados).
 - Domínio próprio e HTTPS: **implementado em 2026-11-15** (`amigo-secreto.barbosalabs.dev`).

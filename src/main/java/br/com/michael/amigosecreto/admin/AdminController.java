@@ -131,6 +131,10 @@ public class AdminController {
             redirectAttributes.addFlashAttribute(
                     "error",
                     "O envio de e-mail está desativado neste ambiente. Baixe o TXT dos links.");
+        } else if (result.quotaExceeded()) {
+            redirectAttributes.addFlashAttribute(
+                    "error",
+                    "O limite diário de envio de e-mails foi atingido. Baixe o TXT dos links.");
         } else if (result.accepted() && result.sandbox()) {
             redirectAttributes.addFlashAttribute(
                     "message",

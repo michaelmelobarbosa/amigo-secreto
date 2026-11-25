@@ -151,6 +151,28 @@ class ParticipantServiceTest {
     }
 
     @Test
+    void duplicateEmailWithinSameEventIsRejectedAcrossJoinAndManualAdd() {
+        Event event = createEvent();
+        participantService.joinByInvite(event, "Ana", "Ana@Example.COM", null);
+
+        RuleViolationException manualError = assertThrows(
+                RuleViolationException.class,
+                () -> participantService.addByOrganizer(event, "Ana 2", "  ana@example.com  ", null));
+        assertEquals("Já existe um participante com este e-mail neste evento.", manualError.getMessage());
+
+        RuleViolationException joinError = assertThrows(
+                RuleViolationException.class,
+                () -> participantService.joinByInvite(event, "Ana 3", "ANA@EXAMPLE.COM", null));
+        assertEquals("Já existe um participante com este e-mail neste evento.", joinError.getMessage());
+        assertEquals(2, participantRepository.countByEvent_Id(event.getId()));
+
+        Event otherEvent = createEvent();
+        Participant inOtherEvent = participantService.joinByInvite(
+                otherEvent, "Ana", "ana@example.com", null);
+        assertNotNull(inOtherEvent.getId());
+    }
+
+    @Test
     void addByOrganizerIsRejectedAfterDraw() {
         Event event = createEvent();
         event.markDrawn(Instant.now());
