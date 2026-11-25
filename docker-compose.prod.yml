@@ -75,7 +75,7 @@ services:
     mem_limit: 1g
     cpus: "1.0"
     healthcheck:
-      test: ["CMD", "/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/actuator/health"]
       interval: 30s
       timeout: 5s
       retries: 3

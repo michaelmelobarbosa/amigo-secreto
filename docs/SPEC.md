@@ -232,7 +232,7 @@ Use POST para remoções (formulários HTML não têm DELETE) e proteja contra C
 
 ## 7. Segurança e privacidade
 
-- Todo acesso é validado por token. Token inexistente retorna 404 (não 403), para não confirmar a existência.
+- Todo acesso é validado por token. Token inexistente retorna 404 (não 403), para não confirmar a existência. Requisições com `;` no caminho (parâmetros de matriz) também retornam 404 antes do roteamento, evitando discrepâncias entre proxy e Tomcat; e o `/actuator/health` fica isolado em porta de management vinculada a loopback (`127.0.0.1:8081`), fora da porta pública da aplicação (`8080`).
 - Os tokens do admin, do convite e dos participantes são distintos. Os dois últimos não dão acesso ao painel.
 - Rotas `/p/**`, `/join/**` e `/admin/**` com `Cache-Control: no-store` e `Referrer-Policy: no-referrer`, para o token não vazar para terceiros. Os headers de segurança também cobrem `/` e `/events` (o redirect de criação carrega o token do painel).
 - `robots.txt` bloqueia indexação; CSP restritiva (`script-src 'self'`, `frame-ancestors 'none'`); `X-Content-Type-Options`, `X-Frame-Options` e `X-Robots-Tag` nas rotas sensíveis.
@@ -343,7 +343,7 @@ Isso também deixa a fase 2 barata: `email` e `notification` são migrations nov
 2. `docker-compose.yml` de produção: serviços `app` e `db` (Postgres com volume persistente). O **Caddy** vive em um stack de borda separado, compartilhado com outras aplicações, e publica 80/443 com HTTPS automático (Let's Encrypt); a app não publica portas e entra na rede externa `edge` como `amigo-app`.
 3. Configuração por variáveis de ambiente (`SPRING_DATASOURCE_URL`, usuário, senha, `APP_BASE_URL`) em arquivo `.env` fora do Git.
 4. Backup periódico do volume do Postgres (`pg_dump` agendado). Na VPS atual, que **não tem `cron`**, o agendamento é um **systemd timer** (`amigo-secreto-backup.timer`, 03:15, retenção 14 dias).
-5. Endpoint de saúde (`/actuator/health`), se adicionar o Actuator, usado pelo healthcheck do Compose.
+5. Endpoint de saúde (`/actuator/health`) isolado em porta de management vinculada apenas a loopback (`127.0.0.1:8081`), usado pelo healthcheck interno do Compose e sem exposição na porta da aplicação (`8080`).
 6. Domínio e HTTPS **em produção desde 2026-11-15**: app em `amigo-secreto.barbosalabs.dev` e envio em `mail.barbosalabs.dev`, com DKIM/DMARC. A VPS não tem IPv6 global, então só há registro A.
 7. Atrás do proxy, configurar `server.forward-headers-strategy=native` (lendo apenas `X-Forwarded-For` e `X-Forwarded-Proto` de proxies internos) para que o esquema (`https`) e o IP real funcionem sem confiar em `Forwarded`, `X-Forwarded-Host` ou `X-Forwarded-Prefix`.
 

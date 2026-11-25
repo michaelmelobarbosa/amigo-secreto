@@ -44,6 +44,10 @@ spring:
   web:
     locale: pt_BR
     locale-resolver: fixed
+    error:
+      include-message: never
+      include-stacktrace: never
+      include-path: never
 
 server:
   forward-headers-strategy: native
@@ -62,12 +66,11 @@ server:
         http-only: true
         same-site: lax
         secure: ${SESSION_COOKIE_SECURE:true}
-  error:
-    include-message: never
-    include-stacktrace: never
-    include-path: never
 
 management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+    address: 127.0.0.1
   endpoints:
     web:
       exposure:

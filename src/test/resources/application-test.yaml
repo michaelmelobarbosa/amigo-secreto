@@ -30,3 +30,7 @@ app:
     worker-enabled: false
     brevo:
       sandbox: true
+
+management:
+  server:
+    port: 0

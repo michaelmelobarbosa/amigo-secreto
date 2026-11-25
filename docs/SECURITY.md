@@ -53,7 +53,7 @@ Todas as respostas (incluindo arquivos estáticos) recebem `Referrer-Policy: no-
 - `X-Robots-Tag: noindex, nofollow` em `/admin/`, `/p/` e `/join/`;
 - `robots.txt` com `Disallow: /`.
 
-`SecurityHeadersFilter` e `RateLimitFilter` normalizam o caminho da requisição em `RequestPaths` (removendo parâmetros de matriz `;...`, barras repetidas e segmentos `.`/`..`) antes de classificar a rota, evitando contorno por variações de URI.
+`MatrixParameterRejectionFilter` rejeita com `404` qualquer caminho que contenha `;` (parâmetros de matriz), impedindo discrepâncias entre o proxy de borda e o roteamento do Tomcat (como `/actuator;x`). Em seguida, `SecurityHeadersFilter` e `RateLimitFilter` normalizam o caminho em `RequestPaths` (removendo barras repetidas, segmentos `.`/`..` e percent-encoding redundante) antes de classificar a rota.
 
 Se for necessário telemetria no proxy, redija a URI inteira: o token está no **path**, não na query string. Um access log comum gravaria credenciais em disco.
 
@@ -136,6 +136,7 @@ Detalhes operacionais em [EMAIL.md](EMAIL.md).
 ## Segurança da infraestrutura
 
 - Nenhum container do projeto publica portas; só o Caddy de borda publica 80/443.
+- O Actuator (`/actuator/health`) roda em porta de management separada e vinculada apenas a `127.0.0.1:8081` (não responde na porta `8080` alcançada pelo Caddy).
 - O banco fica em rede privada; o app participa da rede privada e da `edge`.
 - Firewall de nuvem libera apenas 80, 443 e a porta de administração restrita.
 - Docker ignora o `INPUT` do host para portas publicadas; a disciplina é não publicar.
@@ -166,8 +167,11 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://<dominio>/admin/adm_naoexiste"
 # headers
 curl -sSI "https://<dominio>/p/p_naoexiste" | grep -Ei 'cache-control|referrer|nosniff|x-frame|content-security|x-robots'
 
-# actuator bloqueado pela borda
-curl -s -o /dev/null -w '%{http_code}\n' "https://<dominio>/actuator/health"      # 404
+# actuator e parâmetros de matriz bloqueados (app + borda)
+for p in /actuator /actuator/health '/actuator;x' '/actuator;x/health' '/admin;x/adm_inexistente'; do
+  printf '%-28s -> ' "$p"
+  curl -sS --path-as-is -o /dev/null -w '%{http_code}\n' "https://<dominio>$p"    # 404
+done
 
 # rate limit (CSRF pode responder 403 antes do limite)
 for i in $(seq 1 6); do
@@ -186,7 +190,7 @@ Testes automatizados relevantes:
 
 - `common/TokenGenerator`, `common/LinkBuilder`
 - `common/web/CsrfTokenManager`, `common/web/CsrfTokenInterceptor`
-- `common/web/SecurityHeadersFilter`, `common/web/RequestPaths`
+- `common/web/MatrixParameterRejectionFilter`, `common/web/SecurityHeadersFilter`, `common/web/RequestPaths`
 - `common/web/RateLimitFilter`, `common/RateLimitProperties`
 - `common/web/GlobalExceptionHandler`
 - `notification/`, `notification/EmailQuotaGuard` e `email/` para entrega, cota diária e outbox

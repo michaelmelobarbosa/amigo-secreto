@@ -151,10 +151,13 @@ Se o pacote do GHCR virar privado, a VPS precisa de `docker login ghcr.io` com u
    curl -sS -o /dev/null -w '%{http_code}\n' "https://$DOMAIN/"
    curl -sSI "https://$DOMAIN/" | grep -i strict-transport-security
    curl -sS "https://$DOMAIN/robots.txt"
-   curl -sS -o /dev/null -w '%{http_code}\n' "https://$DOMAIN/actuator/health"
+   for p in /actuator /actuator/health '/actuator;x' '/actuator;x/health' '/admin;x/adm_inexistente'; do
+     printf '%-28s -> ' "$p"
+     curl -sS --path-as-is -o /dev/null -w '%{http_code}\n' "https://$DOMAIN$p"
+   done
    ```
 
-   Esperado: `200`, HSTS presente, `Disallow: /` e **404** em `/actuator/health`.
+   Esperado: `200`, HSTS presente, `Disallow: /` e **404** em todas as variações de `/actuator` e caminhos com `;`.
 
 8. **Confirmar o Flyway**
 
@@ -371,7 +374,7 @@ import sites/*.caddy
 amigo-secreto.barbosalabs.dev {
     encode zstd gzip
 
-    @actuator path /actuator /actuator/*
+    @actuator path_regexp actuator ^/actuator
     respond @actuator 404
 
     reverse_proxy amigo-app:8080 {
@@ -388,7 +391,7 @@ amigo-secreto.barbosalabs.dev {
 }
 ```
 
-O `reverse_proxy` remove `Forwarded` (RFC 7239) e `X-Forwarded-Prefix` vindos do cliente para que não passem para a app, atuando em conjunto com `server.forward-headers-strategy: native` (que lê apenas `X-Forwarded-For` e `X-Forwarded-Proto` de proxies internos).
+O `reverse_proxy` remove `Forwarded` (RFC 7239) e `X-Forwarded-Prefix` vindos do cliente para que não passem para a app, atuando em conjunto com `server.forward-headers-strategy: native` (que lê apenas `X-Forwarded-For` e `X-Forwarded-Proto` de proxies internos). O matcher `@actuator path_regexp actuator ^/actuator` atua como defesa em profundidade na borda: na aplicação, o Actuator já escuta apenas em `127.0.0.1:8081` e `MatrixParameterRejectionFilter` responde `404` para qualquer caminho contendo `;`.
 
 Na prática, o arquivo usa o **hostname literal** em vez de `{$DOMAIN}`: um `.env` por stack não comporta vários domínios. Nova aplicação = novo arquivo em `sites/` + reload.
 
@@ -472,7 +475,7 @@ sudo docker system df
 | --- | --- |
 | `exec format error` | imagem amd64; use a imagem ARM64 publicada pelo CI |
 | `app` reinicia em loop | `logs app`: conexão com `db`, credenciais e Flyway |
-| `app` unhealthy | `docker compose ... exec app /bin/busybox wget -q -O - http://localhost:8080/actuator/health` |
+| `app` unhealthy | `docker compose ... exec app /bin/busybox wget -q -O - http://127.0.0.1:8081/actuator/health` |
 | Caddy não emite certificado | DNS aponta para a VPS? 80/443 liberadas no firewall de nuvem? `logs caddy` |
 | `502 Bad Gateway` | `amigo-app` está healthy e na rede `edge`? |
 | `network edge not found` | crie a rede externa e suba a borda |
@@ -493,7 +496,7 @@ sudo docker system df
 - [ ] `db` e `app` `healthy`.
 - [ ] Flyway aplicado; `ddl-auto=validate` passou.
 - [ ] `GET /` retorna `200`; HSTS presente.
-- [ ] `/actuator/health` retorna `404` pela borda.
+- [ ] `/actuator/health` e `/actuator;x/health` retornam `404` pela borda.
 - [ ] `robots.txt` com `Disallow: /`.
 - [ ] HTML sem `;jsessionid`.
 - [ ] Só o Caddy da borda publica 80/443.

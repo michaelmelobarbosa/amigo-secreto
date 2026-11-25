@@ -62,6 +62,6 @@ EXPOSE 8080
 
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
 
-# start-period cobre Flyway + JPA; /actuator/health expõe só o necessário (application.yaml).
+# start-period cobre Flyway + JPA; /actuator/health responde apenas na porta de management em loopback (8081).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD ["/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/actuator/health"]
+    CMD ["/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/actuator/health"]

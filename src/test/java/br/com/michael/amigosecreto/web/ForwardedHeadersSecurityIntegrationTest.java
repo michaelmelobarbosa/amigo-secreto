@@ -127,7 +127,7 @@ class ForwardedHeadersSecurityIntegrationTest {
     }
 
     @Test
-    void matrixParamsAndEncodedPathDoNotBypassRateLimitOrPrivacyHeadersInTomcat() throws Exception {
+    void matrixParamsAreRejectedAndEncodedPathDoesNotBypassRateLimitInTomcat() throws Exception {
         HttpClient client = newClient();
         String csrf = fetchCsrf(client);
         List<String> createdAdminTokens = new ArrayList<>();
@@ -151,7 +151,16 @@ class ForwardedHeadersSecurityIntegrationTest {
                     "Evento Bypass Matrix",
                     "Org",
                     "X-Forwarded-For", "203.0.113.70");
-            assertThat(matrixPost.statusCode()).isEqualTo(429);
+            assertThat(matrixPost.statusCode()).isEqualTo(404);
+
+            HttpResponse<String> freshIpMatrixPost = postToPath(
+                    client,
+                    "/events;x=1",
+                    csrf,
+                    "Evento Bypass Matrix Fresh IP",
+                    "Org",
+                    "X-Forwarded-For", "203.0.113.71");
+            assertThat(freshIpMatrixPost.statusCode()).isEqualTo(404);
 
             HttpResponse<String> encodedPost = postToPath(
                     client,
@@ -167,10 +176,11 @@ class ForwardedHeadersSecurityIntegrationTest {
                     .GET()
                     .build();
             HttpResponse<String> adminResponse = client.send(adminGet, HttpResponse.BodyHandlers.ofString());
-            assertThat(adminResponse.statusCode()).isEqualTo(200);
+            assertThat(adminResponse.statusCode()).isEqualTo(404);
             assertThat(adminResponse.headers().firstValue("Cache-Control")).contains("no-store");
             assertThat(adminResponse.headers().firstValue("Referrer-Policy")).contains("no-referrer");
             assertThat(adminResponse.headers().firstValue("X-Robots-Tag")).contains("noindex, nofollow");
+            assertThat(adminResponse.body()).doesNotContain(adminToken);
         } finally {
             deleteEvents(client, csrf, createdAdminTokens);
         }

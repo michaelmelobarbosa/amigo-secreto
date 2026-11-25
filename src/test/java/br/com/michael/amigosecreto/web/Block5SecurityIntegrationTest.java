@@ -280,12 +280,15 @@ class Block5SecurityIntegrationTest {
     }
 
     @Test
-    void adminDashboardWithMatrixParamsOrDotSegmentsKeepsPrivacyHeaders() throws Exception {
+    void adminDashboardRejectsMatrixParamsAndKeepsPrivacyHeaders() throws Exception {
         MockHttpSession session = sessionWithCsrfToken();
         String adminToken = createEventThroughForm(session, EVENT_NAME, ORGANIZER_NAME);
 
-        assertPrivacyHeaders(mockMvc.perform(get("/admin;x=1/{adminToken}", adminToken))
-                .andExpect(status().isOk()));
+        ResultActions matrixActions = mockMvc.perform(get("/admin;x=1/{adminToken}", adminToken))
+                .andExpect(status().isNotFound());
+        assertPrivacyHeaders(matrixActions);
+        MvcResult matrixResult = matrixActions.andReturn();
+        assertThat(matrixResult.getRequest().getSession(false)).isNull();
         assertPrivacyHeaders(mockMvc.perform(get("/css/../admin/{adminToken}", adminToken)));
     }
 
